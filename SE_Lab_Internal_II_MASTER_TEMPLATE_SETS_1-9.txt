@@ -1,0 +1,2943 @@
+SOFTWARE ENGINEERING LAB INTERNAL II
+MASTER TEMPLATE SOLUTION — SETS 1 TO 9
+============================================================
+
+PURPOSE
+-------
+This is a reusable practical template for the Lab Internal II sets.
+The sets repeat the same core tools, but the application, image, port,
+artifact type, pipeline style, and required deployment steps can change.
+
+IMPORTANT EXAM RULE:
+Do NOT blindly copy every command.
+First identify the application type in the question, then select the
+matching branch below.
+
+QUICK DECISION TABLE
+--------------------
+Docker application:
+  WordPress + MySQL       -> use WordPress/MySQL commands
+  Java Web WAR + MySQL     -> use Tomcat + WAR + MySQL commands
+  Flask + Nginx            -> use Flask port 5000 + Nginx port 80
+  Web image + Nagios       -> use Docker Compose with web + Nagios
+
+Java artifact:
+  .jar -> java -jar target/app.jar
+  .war -> deploy to Tomcat webapps/
+
+Jenkins:
+  Freestyle -> Configure project in Jenkins UI
+  Scripted Pipeline -> Jenkinsfile with node/stage/sh
+  Pipeline View / OLTRS -> Jenkinsfile + webhook + Maven + Docker
+
+Kubernetes:
+  Existing Docker Hub image -> image: username/app:tag
+  Local Docker image        -> build first, then deploy
+  Required replicas         -> change replicas or kubectl scale
+  Browser access             -> NodePort + minikube service
+
+AWS:
+  Static HTML -> Nginx Docker container
+  Maven WAR   -> Docker/Tomcat container or Tomcat deployment
+  App port 8080 -> Security Group TCP 8080
+  App port 9090 -> Security Group TCP 9090
+  HTTP         -> TCP 80
+  SSH          -> TCP 22, preferably My IP
+
+
+============================================================
+SET 1 — LIBRARY MANAGEMENT
+============================================================
+
+SET 1 SOURCE TASKS
+------------------
+1. Docker: WordPress + MySQL
+2. Jenkins: Freestyle Java CI
+3. Kubernetes: Deployment, scaling, recovery, rolling update, rollback
+4. Nagios: monitoring
+5. AWS EC2: Library Management deployment
+
+SOURCE-SPECIFIC VALUES
+----------------------
+MySQL image: mysql:5.7
+WordPress image: wordpress:latest
+Docker network: library-network
+Docker volume: mysql-data
+WordPress host port used in practice: 8081 when 8080 was occupied
+Jenkins project: Library-Management-CI
+GitHub repository:
+https://github.com/deepthisagar7/library-management
+Jenkins Maven goals: clean test package
+Artifact: target/*.jar
+Kubernetes image: nginx:latest in the sample demonstration
+Replicas: 2 -> 5
+
+
+------------------------------------------------------------
+SET 1 TASK 1 — DOCKER
+------------------------------------------------------------
+
+1. Check Docker
+
+docker --version
+docker ps
+
+2. Pull images
+
+docker pull mysql:5.7
+docker pull wordpress:latest
+
+3. Create network
+
+docker network create library-network
+
+4. Create persistent volume
+
+docker volume create mysql-data
+
+5. Run MySQL
+
+docker run -d --name mysql --network library-network \
+-e MYSQL_ROOT_PASSWORD=root \
+-e MYSQL_DATABASE=wordpress \
+-e MYSQL_USER=wpuser \
+-e MYSQL_PASSWORD=wppass \
+-v mysql-data:/var/lib/mysql mysql:5.7
+
+6. Run WordPress
+
+If port 8080 is free:
+docker run -d --name wordpress --network library-network -p 8080:80 \
+-e WORDPRESS_DB_HOST=mysql:3306 \
+-e WORDPRESS_DB_USER=wpuser \
+-e WORDPRESS_DB_PASSWORD=wppass \
+-e WORDPRESS_DB_NAME=wordpress wordpress:latest
+
+If 8080 is occupied:
+docker run -d --name wordpress --network library-network -p 8081:80 \
+-e WORDPRESS_DB_HOST=mysql:3306 \
+-e WORDPRESS_DB_USER=wpuser \
+-e WORDPRESS_DB_PASSWORD=wppass \
+-e WORDPRESS_DB_NAME=wordpress wordpress:latest
+
+7. Verify
+
+docker ps
+docker network inspect library-network
+docker volume ls
+
+8. Browser
+
+http://localhost:8080
+OR
+http://localhost:8081
+
+9. MySQL failure
+
+docker stop mysql
+docker ps
+
+10. Recovery
+
+docker start mysql
+docker ps
+
+11. Delete container but preserve database
+
+docker rm -f mysql
+docker volume ls
+
+DO NOT delete mysql-data.
+
+12. Recreate MySQL using same volume
+
+docker run -d --name mysql --network library-network \
+-e MYSQL_ROOT_PASSWORD=root \
+-e MYSQL_DATABASE=wordpress \
+-e MYSQL_USER=wpuser \
+-e MYSQL_PASSWORD=wppass \
+-v mysql-data:/var/lib/mysql mysql:5.7
+
+The data survives because:
+mysql-data -> /var/lib/mysql
+
+
+============================================================
+SET 1 TASK 2 — JENKINS FREESTYLE
+============================================================
+
+1. Open:
+http://localhost:8080
+
+2. New Item -> Library-Management-CI -> Freestyle project
+
+3. Source Code Management -> Git
+
+Repository:
+https://github.com/deepthisagar7/library-management
+
+Branch:
+*/main
+
+4. Build trigger
+
+Poll SCM:
+H/5 * * * *
+
+5. Configure JDK 17.
+
+JDK path used:
+C:\Program Files\Java\jdk-17
+
+6. Configure Maven 3.9.16.
+
+Example:
+C:\apache-maven-3.9.16\apache-maven-3.9.16
+
+7. Build step:
+Invoke top-level Maven targets
+
+Goals:
+clean test package
+
+8. Archive artifact:
+
+target/*.jar
+
+For a WAR project use:
+target/*.war
+
+9. Build Now -> Console Output
+
+Expected:
+BUILD SUCCESS
+
+10. Verify artifact under Jenkins build Artifacts.
+
+Important:
+If Maven says "invalid target release: 17", Jenkins is using an older JDK.
+Configure Jenkins to use JDK 17.
+
+
+============================================================
+SET 1 TASK 3 — KUBERNETES
+============================================================
+
+1. Start Minikube
+
+minikube start
+minikube status
+kubectl get nodes
+
+2. Create library-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: library-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: library-app
+  template:
+    metadata:
+      labels:
+        app: library-app
+    spec:
+      containers:
+      - name: library-container
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+
+3. Apply
+
+kubectl apply -f library-deployment.yaml
+
+4. Verify
+
+kubectl get deployments
+kubectl get pods
+
+5. Service
+
+kubectl expose deployment library-app --type=NodePort --port=80
+
+6. Open
+
+minikube service library-app
+
+7. Scale 2 -> 5
+
+kubectl scale deployment library-app --replicas=5
+kubectl get pods
+
+8. Automatic recovery
+
+kubectl get pods
+kubectl delete pod <pod-name>
+kubectl get pods
+
+Deployment recreates the missing Pod.
+
+9. Rolling update
+
+kubectl set image deployment/library-app library-container=nginx:1.27
+
+10. Verify
+
+kubectl rollout status deployment/library-app
+kubectl rollout history deployment/library-app
+
+11. Rollback
+
+kubectl rollout undo deployment/library-app
+kubectl rollout status deployment/library-app
+
+
+============================================================
+SET 1 TASK 4 — NAGIOS
+============================================================
+
+1. Pull
+
+docker pull jasonrivers/nagios:latest
+
+2. Run
+
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+3. Browser
+
+http://localhost:8082
+
+Login:
+nagiosadmin
+nagiosadmin
+
+If password fails:
+
+docker exec -it nagios htpasswd -b \
+/opt/nagios/etc/htpasswd.users nagiosadmin nagiosadmin
+
+docker restart nagios
+
+4. Check HTTP plugin
+
+docker exec nagios ls /opt/nagios/libexec/check_http
+
+5. Connect Nagios to application network
+
+docker network connect library-network nagios
+
+6. HTTP check
+
+docker exec nagios /opt/nagios/libexec/check_http -H wordpress -p 80
+
+7. Failure demonstration
+
+docker stop wordpress
+
+docker exec nagios /opt/nagios/libexec/check_http -H wordpress -p 80
+
+8. Recovery
+
+docker start wordpress
+
+docker exec nagios /opt/nagios/libexec/check_http -H wordpress -p 80
+
+9. Disk threshold
+
+docker exec nagios /opt/nagios/libexec/check_disk -w 20% -c 10%
+
+Meaning:
+free > 20% = OK
+free <= 20% = WARNING
+free <= 10% = CRITICAL
+
+10. Load plugin
+
+docker exec nagios ls /opt/nagios/libexec/check_load
+
+If available:
+docker exec nagios /opt/nagios/libexec/check_load
+
+If check_mysql does not exist, do not waste time executing it.
+
+
+============================================================
+SET 1 TASK 5 — AWS EC2
+============================================================
+
+1. AWS Academy -> Start Lab -> AWS link
+
+2. EC2 -> Instances -> Launch instances
+
+3. Name:
+Library-server
+
+4. Amazon Linux 2023 or lab-permitted AMI
+
+5. Instance type:
+t3.micro or lab-permitted type
+
+6. Security Group:
+SSH 22 -> My IP
+HTTP 80 -> Anywhere IPv4 if required
+Custom TCP 8080 -> Anywhere IPv4 if application listens on 8080
+
+7. Launch.
+
+8. Wait:
+Running
+3/3 checks passed
+
+9. Connect:
+EC2 Instance Connect
+
+10. Check:
+
+java -version
+mvn -version
+git --version
+
+Install if required:
+
+sudo dnf install maven -y
+sudo dnf install git -y
+
+11. Clone:
+
+cd ~
+git clone https://github.com/deepthisagar7/library-management.git
+cd library-management
+
+12. Build:
+
+mvn clean package
+
+13. Check:
+
+ls target
+
+14. Main class:
+
+grep -R "public static void main" src
+
+15. Run JAR if project is a console JAR:
+
+java -jar target/library-management-1.0-SNAPSHOT.jar
+
+Stop:
+Ctrl+C
+
+IMPORTANT:
+A console JAR is NOT a browser application.
+If the question requires browser/Tomcat access, the project must provide a web application/WAR
+or an HTTP server.
+
+16. CloudWatch:
+CloudWatch -> Metrics -> EC2
+
+17. Restrict SSH:
+Port 22 -> My IP, not 0.0.0.0/0 unless temporarily required by the lab.
+
+
+============================================================
+SET 2 — METRO RESERVATION
+============================================================
+
+SOURCE:
+https://github.com/deepthisagar7/metro-reservation.git
+
+MAIN DIFFERENCE:
+This set uses a Java WEB application and explicitly expects a WAR and Tomcat,
+not the console JAR approach used in Set 1.
+
+TASK 1 — DOCKER TOMCAT + MYSQL
+------------------------------
+
+1. Pull Tomcat and MySQL
+
+docker pull tomcat:10
+docker pull mysql:5.7
+
+Use the Tomcat version required by the lab if specified.
+
+2. Build WAR
+
+cd metro-reservation
+mvn clean package
+
+Check:
+
+ls target
+
+Expected:
+metro-reservation.war
+
+3. Create network
+
+docker network create metro-network
+
+4. Create volume
+
+docker volume create metro-mysql-data
+
+5. MySQL
+
+docker run -d --name metro-mysql \
+--network metro-network \
+-e MYSQL_ROOT_PASSWORD=root \
+-e MYSQL_DATABASE=metrodb \
+-e MYSQL_USER=metrouser \
+-e MYSQL_PASSWORD=metropass \
+-v metro-mysql-data:/var/lib/mysql \
+mysql:5.7
+
+6. Application container
+
+Copy WAR into Tomcat:
+
+docker run -d --name metro-app \
+--network metro-network \
+-p 8080:8080 \
+tomcat:10
+
+Then copy WAR:
+
+docker cp target/metro-reservation.war metro-app:/usr/local/tomcat/webapps/
+
+7. Verify:
+
+docker ps
+docker network inspect metro-network
+
+8. Browser:
+
+http://localhost:8080/metro-reservation/
+
+Exact context path may change with the WAR filename.
+
+9. MySQL troubleshooting:
+Check logs:
+docker logs metro-mysql
+docker logs metro-app
+
+Application DB host should be:
+metro-mysql
+Port:
+3306
+
+
+TASK 2 — JENKINS FREESTYLE
+--------------------------
+
+Repository:
+https://github.com/deepthisagar7/metro-reservation.git
+
+Create Freestyle project.
+
+Git:
+*/main (or the branch actually present)
+
+Configure JDK + Maven.
+
+Maven goal:
+clean test package
+
+For WAR:
+archive:
+target/*.war
+
+Expected:
+metro-reservation.war
+
+Difference from Set 1:
+Set 1 practical project produced a JAR.
+Set 2 expects a WAR.
+
+
+TASK 3 — NAGIOS
+---------------
+
+Same base Nagios procedure:
+
+docker pull jasonrivers/nagios:latest
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+Open:
+http://localhost:8082
+
+Monitor HTTP service on the application port.
+
+For application running on host:
+port 8080
+
+For Docker-container monitoring:
+put Nagios and target container on same Docker network.
+
+
+TASK 4 — KUBERNETES
+-------------------
+
+Build Docker image first.
+
+Example:
+
+docker build -t metro-reservation:1.0 .
+
+If image must be available to Minikube:
+
+minikube image load metro-reservation:1.0
+
+Create Deployment YAML using:
+
+image: metro-reservation:1.0
+
+Then:
+
+minikube start
+kubectl apply -f metro-deployment.yaml
+kubectl get pods
+
+Scale:
+
+kubectl scale deployment metro-app --replicas=4
+
+Expose:
+
+kubectl expose deployment metro-app \
+--type=NodePort --port=8080
+
+Open:
+
+minikube service metro-app
+
+Delete a Pod:
+
+kubectl delete pod <pod-name>
+
+Verify automatic recreation:
+
+kubectl get pods
+
+
+TASK 5 — AWS
+------------
+
+For a Java web application, install Java/Maven/Git, clone repository,
+build WAR, and deploy WAR to Tomcat.
+
+Ubuntu example:
+
+sudo apt update
+sudo apt install git maven openjdk-17-jdk -y
+
+Clone:
+
+git clone https://github.com/deepthisagar7/metro-reservation.git
+cd metro-reservation
+
+Build:
+
+mvn clean package
+
+Deploy WAR to Tomcat.
+
+Browser:
+http://<PUBLIC-IP>:8080/<WAR-CONTEXT-PATH>/
+
+Security Group:
+22 -> My IP
+8080 -> Anywhere IPv4 for lab browser test
+
+If browser fails:
+check EC2 status
+check Tomcat process
+check port 8080
+check Security Group
+check Public IPv4
+
+
+============================================================
+SET 3 — AI-OLMS
+============================================================
+
+SOURCE:
+https://github.com/deepthisagar7/AI-OLMS.git
+
+MAIN DIFFERENCE:
+Java web application + MySQL + WAR + Tomcat.
+The Kubernetes and AWS pattern is similar to Set 2.
+
+TASK 1 — DOCKER
+---------------
+
+1. Build WAR:
+
+mvn clean package
+
+Expected:
+AI-OLMS WAR in target/
+
+2. Pull:
+
+docker pull tomcat:10
+docker pull mysql:5.7
+
+3. Network:
+
+docker network create ai-olms-network
+
+4. MySQL:
+
+docker run -d --name ai-olms-db \
+--network ai-olms-network \
+-e MYSQL_ROOT_PASSWORD=root \
+-e MYSQL_DATABASE=aiolms \
+-e MYSQL_USER=aiuser \
+-e MYSQL_PASSWORD=aipass \
+mysql:5.7
+
+5. Tomcat:
+
+docker run -d --name ai-olms-app \
+--network ai-olms-network \
+-p 8080:8080 \
+tomcat:10
+
+6. Copy WAR:
+
+docker cp target/<AI-OLMS-WAR>.war \
+ai-olms-app:/usr/local/tomcat/webapps/
+
+7. Verify:
+
+docker ps
+docker logs ai-olms-app
+docker network inspect ai-olms-network
+
+8. Browser:
+http://localhost:8080/<WAR-CONTEXT-PATH>/
+
+
+TASK 2 — JENKINS FREESTYLE
+--------------------------
+
+Repository:
+https://github.com/deepthisagar7/AI-OLMS.git
+
+Configure:
+Git
+JDK
+Maven
+
+Maven:
+clean test package
+
+Archive:
+target/*.war
+
+Verify:
+BUILD SUCCESS
+WAR generated
+
+
+TASK 3 — NAGIOS
+---------------
+
+docker pull jasonrivers/nagios:latest
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+Open:
+http://localhost:8082
+
+Check HTTP service.
+
+Important:
+Nagios checks application availability separately from whether the EC2/Docker server itself is running.
+
+
+TASK 4 — KUBERNETES
+-------------------
+
+Build:
+
+docker build -t ai-olms:1.0 .
+
+If Minikube cannot see the local image:
+
+minikube image load ai-olms:1.0
+
+Create Deployment:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-olms
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-olms
+  template:
+    metadata:
+      labels:
+        app: ai-olms
+    spec:
+      containers:
+      - name: ai-olms-container
+        image: ai-olms:1.0
+        ports:
+        - containerPort: 8080
+
+Apply:
+
+kubectl apply -f ai-olms.yaml
+kubectl get pods
+
+Scale:
+
+kubectl scale deployment ai-olms --replicas=4
+kubectl get pods
+
+Expose:
+
+kubectl expose deployment ai-olms \
+--type=NodePort --port=8080
+
+Open:
+
+minikube service ai-olms
+
+Recovery:
+
+kubectl delete pod <pod-name>
+kubectl get pods
+
+
+TASK 5 — AWS
+------------
+
+Ubuntu:
+
+sudo apt update
+sudo apt install openjdk-17-jdk maven git docker.io -y
+
+Start Docker if needed:
+
+sudo systemctl start docker
+
+Clone:
+
+git clone https://github.com/deepthisagar7/AI-OLMS.git
+cd AI-OLMS
+
+Build:
+
+mvn clean package
+
+If Dockerfile exists:
+
+docker build -t ai-olms:1.0 .
+
+Run:
+
+docker run -d --name ai-olms -p 8080:8080 ai-olms:1.0
+
+Security Group:
+22 -> My IP
+8080 -> Anywhere IPv4
+
+Browser:
+http://<PUBLIC-IP>:8080/<context>/
+
+
+============================================================
+SET 4 — HOSPITAL MANAGEMENT SYSTEM
+============================================================
+
+SOURCE:
+https://github.com/Kumbhambhargavi75/HospitalManagementSystem
+
+IMPORTANT DIFFERENCE:
+Set 4 is strongly focused on Jenkins Scripted Pipeline + Email Notification,
+Minikube + Nagios, and AWS Ubuntu + Docker + Nginx.
+
+TASK 1 — JENKINS SCRIPTED PIPELINE
+----------------------------------
+
+Create a Pipeline job.
+
+Use a Jenkinsfile similar to:
+
+node {
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        sh 'mvn clean install'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    stage('Package') {
+        sh 'mvn package'
+    }
+}
+
+On Windows Jenkins, use bat instead of sh:
+
+bat 'mvn clean install'
+bat 'mvn test'
+bat 'mvn package'
+
+For a WAR project:
+target/*.war
+
+
+TASK 2 — EMAIL NOTIFICATION
+---------------------------
+
+Install/configure Email Extension Plugin.
+
+In Jenkins:
+Manage Jenkins -> Plugins -> Available plugins
+Search:
+Email Extension
+
+Configure SMTP in Jenkins system settings.
+
+Pipeline example:
+
+post {
+    failure {
+        emailext(
+            subject: "BUILD FAILED: ${env.JOB_NAME}",
+            body: "Build failed: ${env.BUILD_URL}",
+            to: "team@example.com"
+        )
+    }
+
+    success {
+        emailext(
+            subject: "BUILD SUCCESS: ${env.JOB_NAME}",
+            body: "Build succeeded: ${env.BUILD_URL}",
+            to: "team@example.com"
+        )
+    }
+}
+
+For a Scripted Pipeline, use try/catch/finally if the exact question
+requires a Scripted Pipeline:
+
+node {
+    try {
+        stage('Checkout') {
+            git 'REPOSITORY_URL'
+        }
+
+        stage('Build') {
+            sh 'mvn clean package'
+        }
+
+    } catch (err) {
+        emailext(
+            subject: "Hospital Build FAILED",
+            body: "Build failed: ${env.BUILD_URL}",
+            to: "team@example.com"
+        )
+        throw err
+    }
+}
+
+
+TASK 3 — MINIKUBE + NAGIOS
+--------------------------
+
+Start:
+
+minikube start
+minikube status
+
+Deploy application:
+
+kubectl apply -f hospital-deployment.yaml
+
+Check:
+
+kubectl get pods
+kubectl get deployment
+
+Scale:
+
+kubectl scale deployment hospital-app --replicas=4
+
+Expose:
+
+kubectl expose deployment hospital-app \
+--type=NodePort --port=8080
+
+Open:
+
+minikube service hospital-app
+
+Nagios:
+
+docker pull jasonrivers/nagios:latest
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+Open:
+http://localhost:8082
+
+If Pod repeatedly restarts:
+
+kubectl get pods
+kubectl describe pod <pod-name>
+kubectl logs <pod-name>
+
+Check:
+image
+container port
+environment variables
+application crash
+resource limits
+missing dependency
+
+After fixing:
+
+kubectl rollout restart deployment hospital-app
+kubectl get pods
+
+
+TASK 4 — AWS UBUNTU + NGINX
+---------------------------
+
+a) Static index.html
+
+Launch Ubuntu EC2.
+
+SSH.
+
+Install Docker:
+
+sudo apt update
+sudo apt install docker.io -y
+sudo systemctl enable --now docker
+
+Create page:
+
+mkdir hospital-site
+cd hospital-site
+
+cat > index.html <<'EOF'
+<h1>Hospital Management System</h1>
+EOF
+
+Create Dockerfile:
+
+cat > Dockerfile <<'EOF'
+FROM nginx:latest
+COPY index.html /usr/share/nginx/html/index.html
+EXPOSE 80
+EOF
+
+Build:
+
+sudo docker build -t hospital-site:1.0 .
+
+Run:
+
+sudo docker run -d --name hospital-site -p 80:80 hospital-site:1.0
+
+Security Group:
+22 -> My IP
+80 -> Anywhere IPv4
+
+Browser:
+http://<PUBLIC-IP>
+
+
+b) GitHub source + Docker
+
+sudo apt install git -y
+
+git clone <REPOSITORY_URL>
+cd <PROJECT>
+
+Create Dockerfile.
+
+Build:
+
+sudo docker build -t hospital-app:1.0 .
+
+Run:
+
+sudo docker run -d --name hospital-app -p 80:80 hospital-app:1.0
+
+
+c) Maven Web Project
+
+If project is WAR:
+mvn clean package
+
+Check:
+ls target
+
+Then use Tomcat-based Docker image:
+
+FROM tomcat:10
+COPY target/<APP>.war /usr/local/tomcat/webapps/
+EXPOSE 8080
+
+Build:
+
+sudo docker build -t hospital-war:1.0 .
+
+Run:
+
+sudo docker run -d --name hospital-war -p 8080:8080 hospital-war:1.0
+
+Security Group:
+8080 -> Anywhere IPv4
+
+
+d) Website inaccessible
+
+Check:
+
+sudo docker ps
+sudo docker logs hospital-app
+sudo docker port hospital-app
+
+Then verify Security Group inbound:
+80 for Nginx
+8080 for Tomcat
+
+e) Cleanup
+
+sudo docker stop hospital-app
+sudo docker rm hospital-app
+
+In AWS:
+EC2 -> Instance -> Instance state -> Terminate instance
+
+
+============================================================
+SET 5 — FOOD MANAGEMENT SYSTEM
+============================================================
+
+SOURCE:
+https://github.com/Kumbhambhargavi75/FoodSystem
+
+MAIN DIFFERENCE:
+Docker uses Flask API + Nginx.
+AWS part specifically mentions application port 9090 for the Maven web application.
+
+TASK 1 — DOCKER COMPOSE: FLASK + NGINX
+--------------------------------------
+
+Flask:
+host 5000 -> container 5000
+
+Nginx:
+host 80 -> container 80
+
+Example docker-compose.yml:
+
+services:
+
+  flask:
+    image: <YOUR_FLASK_IMAGE>
+    ports:
+      - "5000:5000"
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    depends_on:
+      - flask
+
+Start:
+
+docker compose up -d
+
+Verify:
+
+docker compose ps
+docker ps
+
+Browser:
+http://localhost:80
+Flask:
+http://localhost:5000
+
+If a local Flask Dockerfile is required:
+
+FROM python:3.11
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+EXPOSE 5000
+CMD ["python", "app.py"]
+
+Build:
+
+docker build -t food-flask:1.0 .
+
+Compose can then use:
+image: food-flask:1.0
+
+
+TASK 2 — JENKINS SCRIPTED PIPELINE
+----------------------------------
+
+Repository:
+https://github.com/Kumbhambhargavi75/FoodSystem
+
+Pipeline stages:
+
+Checkout
+Build
+Test
+Package
+
+Typical:
+
+node {
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/FoodSystem'
+    }
+
+    stage('Build') {
+        sh 'mvn clean install'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    stage('Package') {
+        sh 'mvn package'
+    }
+}
+
+If the project is a WAR project:
+archive target/*.war
+
+If JAR:
+archive target/*.jar
+
+For scheduled build:
+Use Jenkins trigger:
+Build periodically
+
+Example every day at 6 PM:
+0 18 * * *
+
+
+TASK 3 — KUBERNETES
+-------------------
+
+Start:
+
+minikube start
+
+Build image:
+
+docker build -t food-app:1.0 .
+
+If Minikube needs local image:
+
+minikube image load food-app:1.0
+
+Deployment:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: food-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: food-app
+  template:
+    metadata:
+      labels:
+        app: food-app
+    spec:
+      containers:
+      - name: food-container
+        image: food-app:1.0
+        ports:
+        - containerPort: 80
+
+Apply:
+
+kubectl apply -f food-deployment.yaml
+
+Scale:
+
+kubectl scale deployment food-app --replicas=4
+
+Service:
+
+kubectl expose deployment food-app \
+--type=NodePort --port=80
+
+Open:
+
+minikube service food-app
+
+Nagios:
+
+docker pull jasonrivers/nagios:latest
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+
+If Pods are Pending:
+
+kubectl get pods
+kubectl describe pod <pod-name>
+
+Look for:
+image pull failure
+wrong image name
+resource shortage
+invalid YAML
+missing node
+port/configuration problem
+
+
+TASK 4 — AWS FOOD SYSTEM
+------------------------
+
+a) Static website
+
+Ubuntu EC2
+-> Docker
+-> Nginx
+-> index.html
+-> port 80
+
+b) GitHub
+
+git clone <REPOSITORY_URL>
+
+docker build -t food-app:1.0 .
+
+c) Maven Web Project
+
+mvn clean package
+
+Create Dockerfile using Tomcat:
+
+FROM tomcat:10
+COPY target/<APP>.war /usr/local/tomcat/webapps/
+EXPOSE 8080
+
+Build:
+
+docker build -t food-web:1.0 .
+
+Run specifically on port 9090:
+
+docker run -d --name food-web -p 9090:8080 food-web:1.0
+
+IMPORTANT:
+9090:8080 means:
+EC2 host port = 9090
+Tomcat container port = 8080
+
+Security Group:
+TCP 9090 -> Anywhere IPv4
+
+Browser:
+
+http://<PUBLIC-IP>:9090/<context-path>/
+
+
+d) Troubleshoot
+
+docker ps
+docker logs food-web
+docker port food-web
+
+Verify:
+Security Group TCP 9090
+
+
+e) Cleanup
+
+docker stop food-web
+docker rm food-web
+
+Terminate EC2 after testing.
+
+
+============================================================
+SET 6 — CEMS
+============================================================
+
+SOURCE:
+https://github.com/Kumbhambhargavi75/CEMS
+
+TASK 1 — WORDPRESS + MYSQL COMPOSE
+----------------------------------
+
+Create docker-compose.yml:
+
+services:
+
+  wordpress:
+    image: wordpress:latest
+    ports:
+      - "8080:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wpuser
+      WORDPRESS_DB_PASSWORD: wppass
+      WORDPRESS_DB_NAME: wordpress
+    depends_on:
+      - db
+
+  db:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wpuser
+      MYSQL_PASSWORD: wppass
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:
+
+Run:
+
+docker compose up -d
+
+Check:
+
+docker compose ps
+
+Browser:
+
+http://localhost:8080
+
+Stop without deleting:
+
+docker compose stop
+
+Start existing containers:
+
+docker compose start
+
+Stop and remove:
+
+docker compose down
+
+Apply changed configuration:
+
+docker compose up -d
+
+Stop only backend/service:
+docker compose stop <service-name>
+
+IMPORTANT:
+depends_on controls startup order but does not guarantee that MySQL is fully ready.
+If the application still gets DB errors, inspect logs and DB readiness.
+
+
+TASK 2 — JENKINS SCRIPTED PIPELINE
+----------------------------------
+
+Repository:
+https://github.com/Kumbhambhargavi75/CEMS
+
+Required Maven operations:
+clean
+install
+test
+package
+
+Example:
+
+node {
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/CEMS'
+    }
+
+    stage('Install') {
+        sh 'mvn clean install'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    stage('Package') {
+        sh 'mvn package'
+    }
+}
+
+If WAR:
+target/*.war
+
+If JAR:
+target/*.jar
+
+Scheduled trigger:
+0 18 * * *
+
+
+TASK 3 — KUBERNETES
+-------------------
+
+Build Docker image:
+
+docker build -t cems:1.0 .
+
+Start Minikube:
+
+minikube start
+
+If needed:
+
+minikube image load cems:1.0
+
+Deployment:
+Use image:
+cems:1.0
+
+Replicas:
+5 for CEMS scaling task
+
+Apply:
+
+kubectl apply -f cems-deployment.yaml
+
+Scale:
+
+kubectl scale deployment cems --replicas=5
+
+Service:
+
+kubectl expose deployment cems \
+--type=NodePort --port=80
+
+Open:
+
+minikube service cems
+
+Verify:
+
+kubectl get nodes
+kubectl get deployment
+kubectl get replicasets
+kubectl get pods
+kubectl get services
+
+Delete:
+
+kubectl delete deployment cems
+kubectl delete service cems
+
+
+TASK 4 — NAGIOS + MINIKUBE
+--------------------------
+
+Start Minikube and deploy CEMS.
+
+Run Nagios:
+
+docker pull jasonrivers/nagios:latest
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+Open:
+http://localhost:8082
+
+Rollback after bad CEMS version:
+
+kubectl rollout history deployment/cems
+kubectl rollout undo deployment/cems
+kubectl rollout status deployment/cems
+
+
+TASK 5 — AWS EC2 + DOCKER
+-------------------------
+
+Ubuntu:
+
+sudo apt update
+sudo apt install docker.io git maven openjdk-17-jdk -y
+
+Enable Docker:
+
+sudo systemctl enable --now docker
+
+Static website:
+Nginx container on port 80.
+
+Maven Web Project:
+
+git clone https://github.com/Kumbhambhargavi75/CEMS
+cd CEMS
+
+mvn clean package
+
+Dockerfile:
+
+FROM tomcat:10
+COPY target/<APP>.war /usr/local/tomcat/webapps/
+EXPOSE 8080
+
+Build:
+
+sudo docker build -t cems:1.0 .
+
+Run:
+
+sudo docker run -d --name cems -p 8080:8080 cems:1.0
+
+Security Group:
+22 -> My IP
+80 -> Anywhere IPv4 for Nginx
+8080 -> Anywhere IPv4 for Tomcat
+
+SSH with PEM if required:
+
+chmod 400 key.pem
+
+ssh -i key.pem ubuntu@<PUBLIC-IP>
+
+
+============================================================
+SET 7 — GENERIC WEB APPLICATION + OLTRS
+============================================================
+
+SET 7 TASK 1 — DOCKER COMPOSE
+-----------------------------
+
+Application + MySQL.
+
+Use:
+
+services:
+  app:
+    image: <WEB-IMAGE>
+    ports:
+      - "<HOST-PORT>:<CONTAINER-PORT>"
+    depends_on:
+      - db
+
+  db:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: appdb
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: apppass
+    volumes:
+      - db-data:/var/lib/mysql
+
+volumes:
+  db-data:
+
+Commands:
+
+docker compose up -d
+docker compose ps
+
+Stop:
+docker compose stop
+
+Start:
+docker compose start
+
+Down:
+docker compose down
+
+Apply changes:
+docker compose up -d
+
+
+SET 7 TASK 2 — JENKINS SCRIPTED PIPELINE
+----------------------------------------
+
+Repository:
+https://github.com/archanareddyse/OLTRS.git
+
+Fork repository into your own GitHub account if required.
+
+Jenkinsfile:
+
+node {
+    stage('Checkout') {
+        git 'YOUR-FORKED-REPOSITORY-URL'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+}
+
+For Windows:
+bat 'mvn clean package'
+bat 'mvn test'
+
+GitHub webhook:
+GitHub -> Repository -> Settings -> Webhooks
+Add Jenkins webhook URL configured for the lab.
+
+Jenkins job:
+Build Triggers -> GitHub hook trigger for GITScm polling
+
+If using a Jenkins Pipeline job, select Pipeline and paste Jenkinsfile.
+
+
+SET 7 TASK 3 — KUBERNETES
+-------------------------
+
+Start:
+
+minikube start
+
+Deployment with web image:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+      - name: web-container
+        image: <DOCKER-HUB-IMAGE>
+        ports:
+        - containerPort: <CONTAINER-PORT>
+
+Apply:
+
+kubectl apply -f web-deployment.yaml
+
+Service:
+
+kubectl expose deployment web-app \
+--type=NodePort \
+--port=<SERVICE-PORT> \
+--target-port=<CONTAINER-PORT>
+
+Verify:
+
+kubectl get nodes
+kubectl get deployment
+kubectl get pods
+kubectl get services
+
+Open:
+
+minikube service web-app
+
+Delete:
+
+kubectl delete deployment web-app
+kubectl delete service web-app
+
+
+SET 7 TASK 4 — AWS
+------------------
+
+Launch EC2.
+
+Security Group:
+22 -> My IP
+80 -> Anywhere IPv4
+8080 -> Anywhere IPv4 if app uses 8080
+
+If app uses 8080:
+
+http://<PUBLIC-IP>:8080
+
+If app uses 80:
+
+http://<PUBLIC-IP>
+
+
+============================================================
+SET 8 — OLTRS + NAGIOS + JENKINS PIPELINE
+============================================================
+
+SOURCE:
+https://github.com/archanareddyse/OLTRS.git
+
+TASK 1 — DOCKER COMPOSE + NAGIOS
+--------------------------------
+
+The question specifically asks for web application + Nagios as separate Compose services.
+
+Generic docker-compose.yml:
+
+services:
+
+  web:
+    image: <WEB-IMAGE>
+    ports:
+      - "8080:<WEB-CONTAINER-PORT>"
+
+  nagios:
+    image: jasonrivers/nagios:latest
+    ports:
+      - "8082:80"
+
+Both services are automatically connected to the Compose network.
+
+Start:
+
+docker compose up -d
+
+Check:
+
+docker compose ps
+
+Browser:
+
+http://localhost:8080
+http://localhost:8082
+
+Stop:
+
+docker compose stop
+
+Start:
+
+docker compose start
+
+Down:
+
+docker compose down
+
+Apply new service/config:
+
+docker compose up -d
+
+
+TASK 2 — JENKINS PIPELINE
+-------------------------
+
+Repository:
+https://github.com/archanareddyse/OLTRS.git
+
+Required flow:
+
+Checkout
+-> Maven Build
+-> Test
+-> WAR
+-> Tomcat
+-> Docker Build
+-> Docker Push
+-> Email result
+
+Scripted Pipeline template:
+
+node {
+
+    stage('Checkout') {
+        git 'YOUR-FORK-URL'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    stage('Deploy to Tomcat') {
+        sh 'cp target/*.war /path/to/tomcat/webapps/'
+    }
+
+    stage('Docker Build') {
+        sh 'docker build -t USERNAME/oltrs:latest .'
+    }
+
+    stage('Docker Push') {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'dockerhub-creds',
+                usernameVariable: 'DOCKER_USER',
+                passwordVariable: 'DOCKER_PASS'
+            )
+        ]) {
+            sh '''
+              echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+              docker push USERNAME/oltrs:latest
+            '''
+        }
+    }
+
+    stage('Email') {
+        echo 'Pipeline completed'
+    }
+}
+
+If Jenkins agent is Windows, replace sh with bat where required.
+
+IMPORTANT:
+The Docker Build/Push stages should happen only after Maven build/test succeeds.
+If the Build stage fails, the pipeline stops and later stages are skipped.
+
+
+============================================================
+SET 9 — OLTRS CI/CD + KUBERNETES + AWS
+============================================================
+
+SOURCE:
+https://github.com/archanareddyse/OLTRS.git
+
+TASK 1 — DOCKER COMPOSE + MYSQL
+-------------------------------
+
+services:
+
+  web:
+    image: <WEB-IMAGE>
+    ports:
+      - "8080:<WEB-CONTAINER-PORT>"
+    depends_on:
+      - db
+
+  db:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: oltrs
+      MYSQL_USER: oltrsuser
+      MYSQL_PASSWORD: oltrspass
+    volumes:
+      - oltrs-data:/var/lib/mysql
+
+volumes:
+  oltrs-data:
+
+Commands:
+
+docker compose up -d
+docker compose ps
+
+Stop:
+docker compose stop
+
+Start:
+docker compose start
+
+Remove:
+docker compose down
+
+Apply changed configuration:
+docker compose up -d
+
+Stop only backend:
+docker compose stop web
+
+
+TASK 2 — SCRIPTED PIPELINE + WEBHOOK + DOCKER HUB
+-------------------------------------------------
+
+Create Jenkins Pipeline.
+
+Jenkinsfile template:
+
+node {
+
+    stage('Checkout') {
+        git 'YOUR-FORKED-OLTRS-URL'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    stage('Docker Build') {
+        sh 'docker build -t USERNAME/oltrs:latest .'
+    }
+
+    stage('Docker Push') {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'dockerhub-creds',
+                usernameVariable: 'DOCKER_USER',
+                passwordVariable: 'DOCKER_PASS'
+            )
+        ]) {
+            sh '''
+              echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+              docker push USERNAME/oltrs:latest
+            '''
+        }
+    }
+}
+
+GitHub webhook:
+
+GitHub repository
+-> Settings
+-> Webhooks
+-> Add webhook
+-> Jenkins webhook URL required by lab
+
+Jenkins:
+Build Triggers
+-> GitHub hook trigger for GITScm polling
+
+If build fails in Maven:
+Docker Build and Docker Push must not execute.
+
+
+TASK 3 — MINIKUBE
+-----------------
+
+Start:
+
+minikube start
+minikube status
+
+If image is pushed to Docker Hub:
+
+image: USERNAME/oltrs:latest
+
+Deployment:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oltrs
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: oltrs
+  template:
+    metadata:
+      labels:
+        app: oltrs
+    spec:
+      containers:
+      - name: oltrs-container
+        image: USERNAME/oltrs:latest
+        ports:
+        - containerPort: 8080
+
+Apply:
+
+kubectl apply -f oltrs-deployment.yaml
+
+Check:
+
+kubectl get nodes
+kubectl get deployment
+kubectl get pods
+
+Service:
+
+kubectl expose deployment oltrs \
+--type=NodePort \
+--port=8080 \
+--target-port=8080
+
+Check:
+
+kubectl get service
+kubectl get endpoints oltrs
+
+Open:
+
+minikube service oltrs
+
+Scale:
+
+kubectl scale deployment oltrs --replicas=4
+
+Verify:
+
+kubectl get pods
+
+Delete:
+
+kubectl delete deployment oltrs
+kubectl delete service oltrs
+
+
+============================================================
+COMMON KUBERNETES TROUBLESHOOTING
+============================================================
+
+Pods not Running:
+
+kubectl get pods
+kubectl describe pod <pod-name>
+kubectl logs <pod-name>
+
+Deployment:
+
+kubectl describe deployment <deployment-name>
+
+Service:
+
+kubectl get svc
+kubectl describe svc <service-name>
+kubectl get endpoints <service-name>
+
+If ENDPOINTS = <none>:
+Check Service selector and Pod labels.
+
+Example:
+Service:
+selector:
+  app: oltrs
+
+Pod:
+labels:
+  app: oltrs
+
+They must match.
+
+Pod Pending:
+kubectl describe pod <pod-name>
+
+Look for:
+image problem
+resource problem
+node problem
+volume problem
+
+Pod CrashLoopBackOff:
+kubectl logs <pod-name>
+
+Check application startup and environment variables.
+
+Automatic recovery:
+kubectl delete pod <pod-name>
+kubectl get pods
+
+
+============================================================
+COMMON JENKINS DIFFERENCES
+============================================================
+
+1. FREESTYLE PROJECT
+--------------------
+Use Jenkins UI.
+
+Source Code Management:
+Git
+
+Build step:
+Invoke top-level Maven targets
+
+Typical goals:
+clean test package
+
+Artifact:
+target/*.war
+OR
+target/*.jar
+
+2. SCRIPTED PIPELINE
+--------------------
+Create Jenkinsfile.
+
+Basic:
+
+node {
+    stage('Checkout') {
+        git 'REPOSITORY_URL'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+}
+
+3. WINDOWS JENKINS
+------------------
+Use:
+bat 'mvn clean package'
+
+instead of:
+sh 'mvn clean package'
+
+4. LINUX JENKINS
+----------------
+Use:
+sh 'mvn clean package'
+
+5. WAR
+-------
+Maven:
+mvn clean package
+
+Output:
+target/app.war
+
+Tomcat:
+copy WAR to:
+$CATALINA_HOME/webapps/
+
+Browser:
+http://localhost:8080/app/
+
+6. JAR
+-------
+Maven:
+mvn clean package
+
+Output:
+target/app.jar
+
+Run:
+java -jar target/app.jar
+
+A JAR is not automatically a browser application.
+
+7. FAILED BUILD
+---------------
+If compilation fails:
+BUILD FAILURE
+
+If tests fail:
+Maven test phase fails and Jenkins marks build failed.
+
+Never intentionally damage the main project unless the exam specifically asks
+for a failed-build demonstration.
+
+
+============================================================
+COMMON DOCKER COMMANDS
+============================================================
+
+Images:
+
+docker pull IMAGE
+docker images
+docker build -t NAME:TAG .
+docker rmi IMAGE
+
+Containers:
+
+docker run -d --name NAME IMAGE
+docker ps
+docker ps -a
+docker logs NAME
+docker stop NAME
+docker start NAME
+docker restart NAME
+docker rm NAME
+docker rm -f NAME
+
+Networks:
+
+docker network create NAME
+docker network ls
+docker network inspect NAME
+docker network connect NETWORK CONTAINER
+
+Volumes:
+
+docker volume create NAME
+docker volume ls
+docker volume inspect NAME
+
+Compose:
+
+docker compose up -d
+docker compose ps
+docker compose logs
+docker compose stop
+docker compose start
+docker compose restart
+docker compose down
+docker compose down -v
+
+IMPORTANT:
+docker compose down -v removes Compose volumes.
+Do NOT use -v when you need to preserve database data.
+
+
+============================================================
+COMMON DOCKER IMAGE DIFFERENCES
+============================================================
+
+MYSQL
+-----
+Typical image:
+mysql:5.7
+
+Database port inside container:
+3306
+
+Example:
+
+-e MYSQL_ROOT_PASSWORD=root
+-e MYSQL_DATABASE=appdb
+-e MYSQL_USER=appuser
+-e MYSQL_PASSWORD=apppass
+
+Persistent mount:
+
+-v db-data:/var/lib/mysql
+
+WORDPRESS
+---------
+Typical image:
+wordpress:latest
+
+Container HTTP port:
+80
+
+Database host:
+db:3306
+OR the actual MySQL container/service name.
+
+Example:
+
+-p 8080:80
+
+TOMCAT
+------
+Typical image:
+tomcat:10
+
+Tomcat container port:
+8080
+
+WAR location:
+
+/usr/local/tomcat/webapps/
+
+Example:
+
+docker cp target/app.war tomcat-container:/usr/local/tomcat/webapps/
+
+Or Dockerfile:
+
+FROM tomcat:10
+COPY target/app.war /usr/local/tomcat/webapps/
+EXPOSE 8080
+
+NGINX
+-----
+Typical image:
+nginx:latest
+
+Container HTTP port:
+80
+
+Static website:
+
+COPY index.html /usr/share/nginx/html/index.html
+
+Run:
+
+docker run -d -p 80:80 nginx
+
+FLASK
+-----
+Typical application port:
+5000
+
+Dockerfile:
+
+FROM python:3.11
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+EXPOSE 5000
+CMD ["python", "app.py"]
+
+Run:
+
+docker run -d -p 5000:5000 flask-app:1.0
+
+
+============================================================
+COMMON PORT MAPPING RULE
+============================================================
+
+Format:
+
+HOST_PORT:CONTAINER_PORT
+
+Example:
+
+-p 9090:8080
+
+Means:
+Browser uses:
+http://SERVER-IP:9090
+
+Docker sends traffic to:
+container port 8080.
+
+This is why Set 5 can use:
+9090:8080
+
+Tomcat still listens on 8080 inside the container.
+
+
+============================================================
+COMMON AWS EC2 STEPS
+============================================================
+
+1. Start AWS Academy lab.
+
+2. Open AWS Management Console using the AWS link.
+
+3. EC2 -> Instances -> Launch instances.
+
+4. Choose required:
+Region
+AMI
+Instance type
+Key pair
+
+5. Security Group.
+
+Typical rules:
+
+SSH:
+TCP 22
+Source:
+My IP
+
+HTTP:
+TCP 80
+Source:
+Anywhere IPv4
+
+Tomcat:
+TCP 8080
+Source:
+Anywhere IPv4 for lab testing
+
+FoodSystem:
+TCP 9090
+Source:
+Anywhere IPv4 for lab testing
+
+6. Launch.
+
+7. Wait for:
+Running
+3/3 checks passed.
+
+8. Connect using:
+EC2 Instance Connect
+OR SSH with PEM if required.
+
+Ubuntu:
+
+chmod 400 key.pem
+ssh -i key.pem ubuntu@<PUBLIC-IP>
+
+Amazon Linux:
+user may be ec2-user.
+
+9. Check:
+
+java -version
+mvn -version
+git --version
+docker --version
+
+10. Install according to OS.
+
+Amazon Linux:
+sudo dnf install git maven -y
+
+Ubuntu:
+sudo apt update
+sudo apt install git maven openjdk-17-jdk docker.io -y
+
+11. Clone:
+
+git clone <REPOSITORY-URL>
+
+12. Build:
+
+mvn clean package
+
+13. Deploy according to application type.
+
+14. Browser:
+
+http://<PUBLIC-IP>
+OR
+http://<PUBLIC-IP>:8080
+OR
+http://<PUBLIC-IP>:9090
+
+15. If inaccessible, check:
+
+EC2 Running
+3/3 checks
+Public IPv4
+Security Group
+Application process
+Application port
+Docker container
+Tomcat
+Firewall
+
+
+============================================================
+AWS SECURITY GROUP — EXAM TEMPLATE
+============================================================
+
+Browser HTTP application:
+TCP 80 -> Anywhere IPv4
+
+Tomcat application:
+TCP 8080 -> Anywhere IPv4
+
+FoodSystem:
+TCP 9090 -> Anywhere IPv4
+
+SSH:
+TCP 22 -> My IP
+
+WHY?
+---------
+22 is administrative access and should be restricted.
+80/8080/9090 are application ports and may need public access for the
+exam demonstration.
+
+Do not leave SSH open to 0.0.0.0/0 in a real deployment.
+
+
+============================================================
+AWS FAILURE TROUBLESHOOTING
+============================================================
+
+SSH fails:
+1. Instance running?
+2. 3/3 checks?
+3. Correct username?
+4. Correct key pair?
+5. Correct .pem permissions?
+6. Security Group TCP 22?
+7. Public IP exists?
+
+Application browser fails:
+1. Application process running?
+2. Correct port?
+3. Security Group allows that port?
+4. Public IPv4 correct?
+5. Docker container running?
+6. Tomcat running?
+7. Application logs?
+
+Example:
+
+docker ps
+docker logs <container>
+
+Tomcat:
+ps -ef | grep tomcat
+
+Check port:
+sudo ss -lntp
+
+
+============================================================
+COMMON NAGIOS COMMANDS
+============================================================
+
+Pull:
+
+docker pull jasonrivers/nagios:latest
+
+Run:
+
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+Browser:
+
+http://localhost:8082
+
+HTTP plugin:
+
+docker exec nagios ls /opt/nagios/libexec/check_http
+
+HTTP check:
+
+docker exec nagios /opt/nagios/libexec/check_http \
+-H <HOST> -p <PORT>
+
+Disk:
+
+docker exec nagios /opt/nagios/libexec/check_disk \
+-w 20% -c 10%
+
+Load:
+
+docker exec nagios ls /opt/nagios/libexec/check_load
+
+Database:
+If check_mysql exists:
+
+docker exec nagios /opt/nagios/libexec/check_mysql ...
+
+If it does not exist, use another available MySQL-compatible plugin
+or explain that the image lacks the plugin.
+
+WARNING:
+Problem is above normal threshold but service may still operate.
+
+CRITICAL:
+Serious failure / threshold exceeded / service unavailable.
+
+
+============================================================
+COMMON SCENARIO ANSWERS
+============================================================
+
+DOCKER
+------
+
+1. Stop all Compose services but preserve containers:
+docker compose stop
+
+2. Start same containers:
+docker compose start
+
+3. Remove containers and default network:
+docker compose down
+
+4. Apply changed Compose configuration:
+docker compose up -d
+
+5. Stop only one service:
+docker compose stop <service-name>
+
+6. Preserve database:
+named Docker volume
+
+7. DB container crashes:
+application loses DB connectivity until DB recovers.
+
+8. Separate containers:
+independent lifecycle, easier scaling, isolation and management.
+
+9. Unauthorized DB access:
+do not expose DB port publicly; use private Docker network,
+strong credentials and restricted Security Group/network rules.
+
+
+JENKINS
+-------
+
+Compilation error:
+Maven reports compilation failure and Jenkins marks build failed.
+
+Tests fail after compilation:
+test phase fails; package/deployment after that does not safely proceed.
+
+Maven advantage:
+dependency management, repeatable builds, standard lifecycle.
+
+Specific branch:
+configure branch specifier:
+*/branch-name
+
+CI vs CD:
+CI automatically integrates/builds/tests changes.
+CD automatically delivers/deploys successful changes.
+
+
+KUBERNETES
+----------
+
+Pod crashes:
+Deployment creates a replacement Pod.
+
+Desired replicas:
+Deployment/ReplicaSet controller maintains the desired count.
+
+Manual scaling:
+administrator changes replicas.
+
+Automatic scaling:
+HPA can change replicas based on metrics.
+
+Service:
+stable network endpoint for Pods and traffic distribution.
+
+Failed update:
+check rollout status/history and rollback:
+
+kubectl rollout status deployment/app
+kubectl rollout history deployment/app
+kubectl rollout undo deployment/app
+
+
+NAGIOS
+------
+
+High CPU:
+Nagios plugin checks CPU/load against configured threshold.
+
+WARNING vs CRITICAL:
+WARNING = problem condition but less severe.
+CRITICAL = serious threshold or service failure.
+
+Server running but application down:
+HTTP/service check detects application failure.
+
+Tomcat vs MySQL vs server:
+check each layer separately:
+server health
+Tomcat process/port
+MySQL process/port
+HTTP response
+logs.
+
+
+AWS
+---
+
+EC2 inaccessible:
+check instance state, public IP, Security Group, route/network,
+application process and port.
+
+Tomcat stops while EC2 runs:
+EC2 remains Running, but web application becomes unavailable.
+
+Availability:
+multiple EC2 instances + Load Balancer.
+
+Persistent data:
+use appropriate persistent storage such as EBS for EC2-hosted data.
+
+SSH restriction:
+TCP 22 from administrator's IP rather than public internet.
+
+
+============================================================
+FINAL EXAM DECISION TREE
+============================================================
+
+QUESTION SAYS "WORDPRESS + MYSQL"
+-> docker compose
+-> wordpress image
+-> mysql image
+-> depends_on
+-> volume
+-> port 8080:80
+
+QUESTION SAYS "JAVA WEB APPLICATION + MYSQL"
+-> mvn clean package
+-> WAR
+-> Tomcat
+-> MySQL
+-> Docker network
+-> 8080:8080
+-> browser
+
+QUESTION SAYS "FLASK + NGINX"
+-> Flask 5000
+-> Nginx 80
+-> Compose
+-> 5000:5000
+-> 80:80
+
+QUESTION SAYS "JENKINS FREESTYLE"
+-> Jenkins UI
+-> Git
+-> JDK
+-> Maven
+-> clean test package
+-> archive WAR/JAR
+
+QUESTION SAYS "JENKINS SCRIPTED PIPELINE"
+-> Jenkinsfile
+-> node
+-> stage
+-> git
+-> sh/bat
+-> Maven
+-> optional email/Docker
+
+QUESTION SAYS "GITHUB WEBHOOK"
+-> GitHub Settings -> Webhooks
+-> Jenkins webhook URL
+-> Jenkins GitHub hook trigger
+
+QUESTION SAYS "DOCKER HUB PUSH"
+-> docker build
+-> Docker Hub credentials
+-> docker login
+-> docker push
+
+QUESTION SAYS "KUBERNETES"
+-> minikube start
+-> Deployment YAML
+-> kubectl apply
+-> get pods
+-> Service
+-> scale
+-> minikube service
+
+QUESTION SAYS "POD FAILURE"
+-> kubectl delete pod
+-> Deployment recreates it
+
+QUESTION SAYS "ROLLBACK"
+-> kubectl rollout history
+-> kubectl rollout undo
+
+QUESTION SAYS "NAGIOS"
+-> pull image
+-> docker run
+-> browser
+-> configure/check service
+-> demonstrate OK/WARNING/CRITICAL
+-> failure/recovery
+
+QUESTION SAYS "AWS STATIC HTML"
+-> Ubuntu
+-> Docker
+-> Nginx
+-> port 80
+-> Security Group 80
+
+QUESTION SAYS "AWS MAVEN WEB PROJECT"
+-> Git
+-> Maven
+-> WAR
+-> Tomcat/Docker
+-> port 8080 or specified port
+-> Security Group
+
+QUESTION SAYS "PORT 9090"
+-> usually:
+docker -p 9090:8080
+-> Security Group TCP 9090
+-> browser:
+http://PUBLIC-IP:9090
+
+
+============================================================
+MOST IMPORTANT THINGS TO MEMORIZE
+============================================================
+
+Docker:
+docker pull
+docker build
+docker run
+docker ps
+docker logs
+docker stop
+docker start
+docker network create
+docker volume create
+docker compose up -d
+docker compose stop
+docker compose start
+docker compose down
+
+Jenkins:
+Git
+JDK
+Maven
+clean
+test
+package
+install
+archive
+Jenkinsfile
+node
+stage
+sh / bat
+webhook
+emailext
+docker build
+docker push
+
+Kubernetes:
+minikube start
+kubectl apply -f
+kubectl get pods
+kubectl get deployment
+kubectl get service
+kubectl scale
+kubectl delete pod
+kubectl expose
+kubectl rollout status
+kubectl rollout history
+kubectl rollout undo
+minikube service
+
+Nagios:
+docker pull
+docker run
+check_http
+check_disk
+check_load
+WARNING
+CRITICAL
+dashboard
+
+AWS:
+EC2
+AMI
+instance type
+key pair
+Security Group
+SSH 22
+HTTP 80
+Tomcat 8080
+FoodSystem 9090
+Public IPv4
+3/3 checks
+Git
+Maven
+Docker
+CloudWatch
+
+
+============================================================
+END
+============================================================

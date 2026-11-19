@@ -1,0 +1,1131 @@
+SOFTWARE ENGINEERING LAB INTERNAL II
+SET 7 — COMPLETE DETAILED PRACTICAL SOLUTIONS
+
+Basis: KMIT Software Engineering Lab Internal II — Set 7.
+Set 7 has 4 questions, 25 marks each. Follow the exact task order.
+
+============================================================
+SET 7 — QUESTION 1
+DOCKER COMPOSE — WEB APPLICATION + MYSQL
+============================================================
+
+Goal:
+Deploy the web application and MySQL database using Docker Compose, verify both containers, and access the web application.
+
+STEP 1 — Check Docker
+
+docker --version
+docker ps
+
+If Docker is running, continue.
+
+STEP 2 — Create a working directory
+
+mkdir library-compose
+cd library-compose
+
+STEP 3 — Create docker-compose.yml
+
+Create a file named:
+
+docker-compose.yml
+
+Use this example. Replace the web image if your faculty provided a specific Docker Hub image.
+
+version: '3.8'
+
+services:
+  web:
+    image: your-dockerhub-username/library-app:latest
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: library
+      DB_USER: libraryuser
+      DB_PASSWORD: librarypass
+    depends_on:
+      - db
+    networks:
+      - library-network
+
+  db:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: library
+      MYSQL_USER: libraryuser
+      MYSQL_PASSWORD: librarypass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - library-network
+
+networks:
+  library-network:
+
+volumes:
+  mysql-data:
+
+IMPORTANT:
+- image must be the web application image available in Docker Hub.
+- The web application's actual internal port must match the image/application.
+- Inside Compose, the web application should use DB_HOST=db, not localhost.
+- MySQL data is stored in mysql-data.
+
+STEP 4 — Check Compose file
+
+docker compose config
+
+If there is no YAML error, continue.
+
+STEP 5 — Start services
+
+docker compose up -d
+
+Check:
+
+docker compose ps
+
+You should see:
+web
+db
+
+STEP 6 — Check logs
+
+docker compose logs
+
+For only the web service:
+
+docker compose logs web
+
+For MySQL:
+
+docker compose logs db
+
+STEP 7 — Verify containers
+
+docker ps
+
+STEP 8 — Verify network
+
+docker network ls
+
+Inspect the Compose network:
+
+docker network inspect library-compose_library-network
+
+The web and db containers should be attached to the same network.
+
+STEP 9 — Verify MySQL
+
+docker compose exec db mysql -u libraryuser -plibrarypass -e "SHOW DATABASES;"
+
+The library database should be listed.
+
+STEP 10 — Access web application
+
+Open the browser:
+
+http://localhost:8080
+
+If your application uses another port, use the port specified in docker-compose.yml.
+
+STEP 11 — Temporarily stop all services
+
+Question 1:
+Use:
+
+docker compose stop
+
+This stops containers but does not remove the containers, network, or configuration.
+
+STEP 12 — Start the same containers again
+
+Question 2:
+Use:
+
+docker compose start
+
+This starts the existing stopped containers without recreating them.
+
+STEP 13 — Stop and remove containers and default network
+
+Question 3:
+Use:
+
+docker compose down
+
+This removes the Compose containers and network.
+
+If you also want to remove named volumes:
+
+docker compose down -v
+
+WARNING:
+Do not use -v if you need to preserve MySQL data.
+
+STEP 14 — Apply changed docker-compose.yml and start services
+
+Question 4:
+Use:
+
+docker compose up -d
+
+Compose creates/updates the required services according to the current configuration.
+
+STEP 15 — Stop only the backend service
+
+Question 5:
+If the backend service is named backend:
+
+docker compose stop backend
+
+If the service is named web in your file:
+
+docker compose stop web
+
+Only that service is stopped.
+
+FINAL SET 7 Q1 COMMANDS
+
+docker compose config
+docker compose up -d
+docker compose ps
+docker compose logs
+docker compose stop
+docker compose start
+docker compose down
+docker compose down -v
+docker compose stop <service>
+docker compose exec db mysql -u libraryuser -plibrarypass
+
+============================================================
+SET 7 — QUESTION 2
+JENKINS SCRIPTED PIPELINE — OLTRS + MAVEN + DOCKER HUB
+============================================================
+
+Goal:
+Create a Groovy Scripted Pipeline for OLTRS that:
+1. Checks out GitHub source.
+2. Uses a GitHub webhook.
+3. Builds/tests using Maven.
+4. Creates a Docker image.
+5. Pushes the image to the student's Docker Hub repository using Jenkins credentials.
+
+Repository from the paper:
+
+https://github.com/archanareddyse/OLTRS.git
+
+STEP 1 — Prepare Jenkins
+
+Open:
+
+http://localhost:8080
+
+Make sure Jenkins is running.
+
+Required tools:
+- Git
+- JDK
+- Maven
+- Docker
+
+Check on the Jenkins machine:
+
+git --version
+java -version
+mvn -version
+docker --version
+
+STEP 2 — Create Docker Hub repository
+
+In your Docker Hub account, create a repository, for example:
+
+oltrs
+
+Assume the Docker Hub username is:
+
+YOUR_DOCKER_USERNAME
+
+STEP 3 — Add Docker Hub credentials to Jenkins
+
+Jenkins:
+
+Manage Jenkins
+→ Credentials
+→ System
+→ Global credentials
+→ Add Credentials
+
+Choose:
+Kind: Username with password
+
+Username:
+YOUR_DOCKER_USERNAME
+
+Password:
+YOUR_DOCKER_PASSWORD
+
+ID:
+
+dockerhub-credentials
+
+Use this ID in the Jenkinsfile.
+
+Never put the Docker Hub password directly inside Jenkinsfile.
+
+STEP 4 — Create Pipeline project
+
+Jenkins:
+
+New Item
+→ OLTRS-CI-CD
+→ Pipeline
+→ OK
+
+STEP 5 — Configure GitHub webhook trigger
+
+In Jenkins project:
+
+Configure
+→ Build Triggers
+
+Select:
+
+GitHub hook trigger for GITScm polling
+
+Save.
+
+STEP 6 — Configure GitHub webhook
+
+Open your GitHub OLTRS repository.
+
+Go to:
+
+Settings
+→ Webhooks
+→ Add webhook
+
+Payload URL:
+
+http://<JENKINS_PUBLIC_ADDRESS>/github-webhook/
+
+Content type:
+
+application/json
+
+Select:
+
+Just the push event
+
+Enable:
+
+Active
+
+Click:
+
+Add webhook
+
+IMPORTANT:
+If Jenkins is running only on localhost, GitHub cannot normally reach it directly. The Jenkins URL must be reachable from GitHub for a real webhook.
+
+STEP 7 — Create Jenkinsfile
+
+Create a file named:
+
+Jenkinsfile
+
+Use:
+
+node {
+
+    def dockerImage = "YOUR_DOCKER_USERNAME/oltrs:latest"
+
+    stage('Checkout') {
+        git url: 'https://github.com/archanareddyse/OLTRS.git',
+            branch: 'main'
+    }
+
+    stage('Build and Test') {
+        sh 'mvn clean test package'
+    }
+
+    stage('Docker Build') {
+        sh "docker build -t ${dockerImage} ."
+    }
+
+    stage('Docker Push') {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'dockerhub-credentials',
+                usernameVariable: 'DOCKER_USER',
+                passwordVariable: 'DOCKER_PASS'
+            )
+        ]) {
+            sh '''
+                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                docker push YOUR_DOCKER_USERNAME/oltrs:latest
+                docker logout
+            '''
+        }
+    }
+}
+
+Replace:
+
+YOUR_DOCKER_USERNAME
+
+with your Docker Hub username.
+
+STEP 8 — If Maven creates a WAR
+
+Check:
+
+ls target
+
+If the project produces a WAR, you may see:
+
+target/*.war
+
+The paper requires Maven build and test, but the exact packaging should follow the repository's project configuration.
+
+STEP 9 — Save and run pipeline
+
+Click:
+
+Build Now
+
+Open:
+
+Console Output
+
+You should see stages such as:
+
+Checkout
+Build and Test
+Docker Build
+Docker Push
+
+Successful result:
+
+Finished: SUCCESS
+
+STEP 10 — Verify Docker Hub
+
+Open your Docker Hub repository.
+
+Verify that the oltrs image/tag was pushed.
+
+STEP 11 — Verify webhook
+
+Push a harmless change to GitHub.
+
+For example:
+
+git add .
+git commit -m "Test Jenkins webhook"
+git push origin main
+
+Jenkins should start automatically if the webhook and Jenkins trigger are correctly configured.
+
+SCENARIO QUESTIONS — SET 7 Q2
+
+1. Jenkins does not start after a GitHub push.
+
+Check:
+- GitHub webhook URL.
+- Jenkins URL is reachable from GitHub.
+- Content type is application/json.
+- Push event is selected.
+- Webhook is Active.
+- Jenkins job has GitHub hook trigger enabled.
+- Correct repository/branch is configured.
+- Check GitHub webhook Recent Deliveries.
+- Check Jenkins logs/build history.
+
+2. Maven fails. How are Docker stages skipped?
+
+The stages are sequential. If:
+
+sh 'mvn clean test package'
+
+fails, the node exits the failed stage and later stages are not executed.
+
+Use:
+
+stage('Build and Test') {
+    sh 'mvn clean test package'
+}
+
+Do not use error-catching logic that marks the build successful before Docker stages.
+
+3. Docker Hub authentication fails.
+
+Create Jenkins credentials:
+
+Kind: Username with password
+ID: dockerhub-credentials
+
+Then use:
+
+withCredentials(...)
+
+and:
+
+docker login --password-stdin
+
+Do not write the password directly in Jenkinsfile.
+
+4. Build works but deployment/push fails.
+
+Open:
+
+Jenkins
+→ Job
+→ Build Number
+→ Console Output
+
+Find:
+
+ERROR
+FAILURE
+
+The Stage View also identifies which stage failed.
+
+5. Email only when pipeline fails.
+
+In a Scripted Pipeline, use try/catch/finally. Example:
+
+node {
+    try {
+        stage('Checkout') {
+            git url: 'https://github.com/archanareddyse/OLTRS.git',
+                branch: 'main'
+        }
+
+        stage('Build') {
+            sh 'mvn clean test package'
+        }
+
+        stage('Docker Build') {
+            sh 'docker build -t YOUR_DOCKER_USERNAME/oltrs:latest .'
+        }
+
+        stage('Docker Push') {
+            // push commands
+        }
+
+    } catch (err) {
+        mail(
+            to: 'your-email@example.com',
+            subject: "OLTRS Jenkins Build Failed: ${env.BUILD_NUMBER}",
+            body: "Build failed. Check ${env.BUILD_URL}"
+        )
+        throw err
+    }
+}
+
+This sends mail only when the pipeline enters the catch block because of failure.
+
+============================================================
+SET 7 — QUESTION 3
+MINIKUBE + KUBERNETES — 4 REPLICAS + NODEPORT
+============================================================
+
+Goal:
+Deploy the Maven web application Docker image from the student's Docker Hub repository using Minikube and Kubernetes.
+
+STEP 1 — Check Minikube
+
+minikube status
+
+If stopped:
+
+minikube start
+
+STEP 2 — Verify node
+
+kubectl get nodes
+
+Expected:
+
+minikube   Ready
+
+STEP 3 — Create Deployment YAML
+
+Create:
+
+library-deployment.yaml
+
+Use:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: library-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: library-app
+  template:
+    metadata:
+      labels:
+        app: library-app
+    spec:
+      containers:
+      - name: library-container
+        image: YOUR_DOCKER_USERNAME/oltrs:latest
+        ports:
+        - containerPort: 8080
+
+Replace:
+YOUR_DOCKER_USERNAME
+
+Use the application's actual container port if it is different.
+
+STEP 4 — Apply Deployment
+
+kubectl apply -f library-deployment.yaml
+
+STEP 5 — Check Deployment
+
+kubectl get deployments
+
+STEP 6 — Check Pods
+
+kubectl get pods
+
+Initially Pods may show ContainerCreating. Wait and run again:
+
+kubectl get pods
+
+STEP 7 — Create NodePort Service
+
+Run:
+
+kubectl expose deployment library-app --type=NodePort --port=8080 --target-port=8080
+
+Check:
+
+kubectl get services
+
+STEP 8 — Open service
+
+minikube service library-app
+
+This displays/opens the Minikube service URL.
+
+STEP 9 — Scale to four replicas
+
+kubectl scale deployment library-app --replicas=4
+
+Check:
+
+kubectl get deployment library-app
+
+Check Pods:
+
+kubectl get pods
+
+Expected:
+
+4 Pods
+
+STEP 10 — Verify everything
+
+kubectl get nodes
+kubectl get deployments
+kubectl get pods
+kubectl get services
+
+For more details:
+
+kubectl describe deployment library-app
+kubectl describe service library-app
+
+STEP 11 — Verify NodePort
+
+kubectl get service library-app
+
+Look for:
+
+80:3xxxx/TCP
+
+or:
+
+8080:3xxxx/TCP
+
+The exact NodePort depends on Kubernetes.
+
+STEP 12 — Access application
+
+minikube service library-app
+
+Or:
+
+minikube service library-app --url
+
+Use the returned URL in the browser.
+
+SCENARIO QUESTIONS — SET 7 Q3
+
+1. Existing replicas = 2, required = 4.
+
+Use:
+
+kubectl scale deployment library-app --replicas=4
+
+Verify:
+
+kubectl get deployment library-app
+kubectl get pods
+
+The READY/AVAILABLE count should reach 4.
+
+2. Pods are running but external users cannot access.
+
+Check/create a Service:
+
+kubectl get services
+
+Check:
+
+kubectl describe service library-app
+
+For Minikube external access, use NodePort:
+
+kubectl expose deployment library-app --type=NodePort --port=8080 --target-port=8080
+
+Then:
+
+minikube service library-app
+
+Also verify Security Group/firewall if accessing through a non-Minikube external environment.
+
+3. Four replicas configured but only two are Running.
+
+Use:
+
+kubectl get pods
+kubectl describe deployment library-app
+kubectl describe pods
+kubectl get events --sort-by=.metadata.creationTimestamp
+
+Check logs for a running/failing application:
+
+kubectl logs <pod-name>
+
+Check image:
+
+kubectl describe pod <pod-name>
+
+Common causes:
+- Wrong Docker image name/tag.
+- Image pull failure.
+- Wrong container port.
+- Application crash.
+- Resource shortage.
+- Invalid YAML.
+
+4. Service ENDPOINTS shows <none>.
+
+Most common cause:
+Service selector does not match Pod labels.
+
+Check Pod labels:
+
+kubectl get pods --show-labels
+
+Check Service:
+
+kubectl describe service library-app
+
+Check YAML.
+
+Deployment:
+
+labels:
+  app: library-app
+
+Service:
+
+selector:
+  app: library-app
+
+The values must match exactly.
+
+5. Delete Deployment and Service.
+
+kubectl delete deployment library-app
+kubectl delete service library-app
+
+Verify:
+
+kubectl get deployments
+kubectl get services
+kubectl get pods
+
+The resources should no longer be listed.
+
+============================================================
+SET 7 — QUESTION 4
+AWS EC2 — DEPLOY WEB APPLICATION
+============================================================
+
+Goal:
+Launch EC2, configure Security Group, deploy application, and access it through public address.
+
+STEP 1 — Start AWS Academy
+
+Open AWS Academy Learner Lab.
+
+Click:
+
+Start Lab
+
+Wait until active.
+
+Click:
+
+AWS
+
+to open Management Console.
+
+STEP 2 — Open EC2
+
+Search:
+
+EC2
+
+Open:
+
+EC2
+→ Instances
+
+STEP 3 — Launch instance
+
+Click:
+
+Launch instances
+
+Set:
+
+Name:
+Library-server
+
+AMI:
+Amazon Linux 2023
+
+Instance type:
+Use the type allowed by your lab, for example t3.micro.
+
+STEP 4 — Key pair
+
+Select/create the permitted key pair.
+
+The key pair is required for SSH-based connection.
+
+STEP 5 — Create Security Group
+
+Create/select a Security Group.
+
+Inbound rules:
+
+SSH
+Port 22
+Source: My IP
+
+HTTP
+Port 80
+Source: Anywhere-IPv4
+
+If the application actually runs directly on port 8080, add:
+
+Custom TCP
+Port 8080
+Source: Anywhere-IPv4
+
+For a lab, this can be used temporarily.
+
+STEP 6 — Launch
+
+Click:
+
+Launch instance
+
+STEP 7 — Wait for health
+
+EC2 → Instances
+
+Wait for:
+
+Running
+
+and:
+
+3/3 checks passed
+
+STEP 8 — Connect
+
+Select instance:
+
+Connect
+→ EC2 Instance Connect
+→ Connect
+
+You should get a terminal.
+
+STEP 9 — Check Java
+
+java -version
+
+If the application requires Java 17, make sure Java 17 is available.
+
+STEP 10 — Install Maven if required
+
+mvn -version
+
+If unavailable:
+
+sudo dnf install maven -y
+
+Verify:
+
+mvn -version
+
+STEP 11 — Install Git
+
+sudo dnf install git -y
+
+Verify:
+
+git --version
+
+STEP 12 — Clone the application
+
+The Set 7 paper asks for web application deployment. Use the repository/application supplied for your lab.
+
+Example:
+
+cd ~
+git clone <YOUR_FORKED_REPOSITORY_URL>
+cd <PROJECT_DIRECTORY>
+
+STEP 13 — Inspect project
+
+ls
+
+Look for:
+
+pom.xml
+src
+
+STEP 14 — Build
+
+mvn clean package
+
+Expected:
+
+BUILD SUCCESS
+
+STEP 15 — Identify output
+
+ls target
+
+If Maven creates a JAR:
+
+ls target/*.jar
+
+If it creates a WAR:
+
+ls target/*.war
+
+STEP 16 — If application is a web application
+
+For a WAR-based Tomcat application, deploy the WAR to Tomcat.
+
+If Tomcat is already installed:
+
+sudo cp target/*.war /opt/tomcat/webapps/
+
+Then start Tomcat according to your installation.
+
+Example:
+
+/opt/tomcat/bin/startup.sh
+
+Check:
+
+ps -ef | grep tomcat
+
+STEP 17 — Verify application port
+
+For Tomcat, commonly:
+
+8080
+
+Check:
+
+sudo ss -tulpn | grep 8080
+
+STEP 18 — Test locally on EC2
+
+curl http://localhost:8080/
+
+If the application has a specific context path:
+
+curl http://localhost:8080/<context-path>/
+
+STEP 19 — Access from browser
+
+Find:
+
+EC2 → Instances → Library-server → Public IPv4 address
+
+Open:
+
+http://<PUBLIC-IP>:8080/
+
+If using HTTP port 80:
+
+http://<PUBLIC-IP>/
+
+STEP 20 — Verify Security Group
+
+EC2:
+
+Security Groups
+→ select your Security Group
+→ Inbound rules
+
+Make sure the application port is allowed.
+
+SCENARIO QUESTIONS — SET 7 Q4
+
+1. SSH connection fails.
+
+Check:
+- Instance state is Running.
+- Status checks passed.
+- Correct username.
+- Correct key pair.
+- Security Group inbound rule allows TCP 22.
+- Source is your current IP.
+- Network ACL/routes are not blocking traffic.
+- Instance has a public IPv4 address or reachable network path.
+
+For Amazon Linux the SSH user is commonly:
+
+ec2-user
+
+2. Application works on port 8080 but not through public IP.
+
+Check:
+- Application is listening on 0.0.0.0, not only 127.0.0.1.
+- EC2 Security Group allows TCP 8080.
+- Correct public IPv4 address is being used.
+- Application process is running.
+- OS firewall is not blocking 8080.
+- URL includes :8080.
+
+Test:
+
+curl http://localhost:8080/
+
+Then from browser:
+
+http://<PUBLIC-IP>:8080/
+
+3. No Public IPv4 address.
+
+For internet access, provide a public addressing/network path. Common EC2 solution:
+
+- Assign an Elastic IP to the instance.
+- Ensure the subnet route table has a route to an Internet Gateway.
+- Ensure the instance is in a public subnet.
+- Ensure Security Group allows required application traffic.
+
+In the lab, use the allowed AWS Academy method.
+
+4. Data must survive stop/start.
+
+Use persistent storage such as an Amazon EBS volume.
+
+The root EBS volume is normally persistent across stop/start when configured appropriately. Verify DeleteOnTermination settings if data must also survive instance termination.
+
+For application/database data, place important data on a dedicated EBS volume and mount it at the required path.
+
+5. Allow HTTP but restrict SSH.
+
+Inbound rules:
+
+HTTP
+TCP
+80
+Source: 0.0.0.0/0
+
+SSH
+TCP
+22
+Source: My IP or the administrator's specific IP/CIDR
+
+Do NOT use:
+
+SSH 22 → 0.0.0.0/0
+
+unless temporarily required by the lab.
+
+============================================================
+SET 7 — QUICK FINAL REVISION
+============================================================
+
+Docker:
+
+docker compose up -d
+docker compose ps
+docker compose logs
+docker compose stop
+docker compose start
+docker compose down
+docker compose stop <service>
+
+Jenkins:
+
+Checkout
+→ Maven test/package
+→ Docker build
+→ Docker login
+→ Docker push
+
+Kubernetes:
+
+minikube start
+kubectl get nodes
+kubectl apply -f library-deployment.yaml
+kubectl get deployments
+kubectl get pods
+kubectl expose deployment library-app --type=NodePort --port=8080 --target-port=8080
+kubectl scale deployment library-app --replicas=4
+kubectl get services
+minikube service library-app
+kubectl delete deployment library-app
+kubectl delete service library-app
+
+AWS:
+
+Launch EC2
+→ Security Group
+→ SSH 22
+→ HTTP 80
+→ 8080 if needed
+→ Connect
+→ Java/Maven/Git
+→ Clone
+→ Build
+→ Run/deploy
+→ Browser test

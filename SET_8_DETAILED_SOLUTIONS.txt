@@ -1,0 +1,1159 @@
+SOFTWARE ENGINEERING LAB INTERNAL II
+SET 8 — COMPLETE DETAILED PRACTICAL SOLUTIONS
+
+Basis: KMIT Software Engineering Lab Internal II — Set 8.
+Set 8 has 4 questions, 25 marks each.
+
+============================================================
+SET 8 — QUESTION 1
+DOCKER COMPOSE — WEB APPLICATION + NAGIOS
+============================================================
+
+Goal:
+Deploy a web application and Nagios as separate Docker Compose services, configure networking/ports, and verify both through a browser.
+
+STEP 1 — Check Docker
+
+docker --version
+docker ps
+
+STEP 2 — Create working directory
+
+mkdir nagios-compose
+cd nagios-compose
+
+STEP 3 — Create docker-compose.yml
+
+Create:
+
+docker-compose.yml
+
+Use:
+
+version: '3.8'
+
+services:
+
+  web:
+    image: YOUR_DOCKER_USERNAME/oltrs:latest
+    ports:
+      - "8080:8080"
+    networks:
+      - monitoring-network
+
+  nagios:
+    image: jasonrivers/nagios:latest
+    ports:
+      - "8082:80"
+    networks:
+      - monitoring-network
+
+networks:
+  monitoring-network:
+
+IMPORTANT:
+Replace the web image with the actual web application Docker Hub image.
+
+If your web application listens on another container port, change:
+
+8080:8080
+
+to the correct mapping.
+
+STEP 4 — Validate Compose file
+
+docker compose config
+
+If there is no configuration error, continue.
+
+STEP 5 — Start services
+
+docker compose up -d
+
+STEP 6 — Check containers
+
+docker compose ps
+
+Or:
+
+docker ps
+
+You should see:
+web
+nagios
+
+STEP 7 — Check logs
+
+docker compose logs
+docker compose logs web
+docker compose logs nagios
+
+STEP 8 — Open web application
+
+Open:
+
+http://localhost:8080
+
+STEP 9 — Open Nagios
+
+Open:
+
+http://localhost:8082
+
+For the provided jasonrivers image, use the configured Nagios credentials. If your lab image uses a different password, use the credentials provided by the image/lab setup.
+
+STEP 10 — Verify shared network
+
+docker network ls
+
+Inspect:
+
+docker network inspect nagios-compose_monitoring-network
+
+Both services should be attached.
+
+STEP 11 — Check service connectivity
+
+From the Nagios container, test the web service using its Compose service name.
+
+docker exec -it nagios sh
+
+Then, if curl is available:
+
+curl http://web:8080/
+
+Exit:
+
+exit
+
+If curl is unavailable, use the Nagios HTTP plugin:
+
+docker exec nagios /opt/nagios/libexec/check_http -H web -p 8080
+
+A successful result should indicate the HTTP service is reachable.
+
+SCENARIO QUESTIONS — SET 8 Q1
+
+1. Temporarily stop all services.
+
+docker compose stop
+
+This stops containers without removing them.
+
+2. Start the same containers again.
+
+docker compose start
+
+This starts the existing containers without recreating them.
+
+3. Stop and remove containers/network.
+
+docker compose down
+
+If volumes were defined and should also be removed:
+
+docker compose down -v
+
+4. Apply changed docker-compose.yml.
+
+docker compose up -d
+
+This creates/updates services according to the current file.
+
+5. Web application is running but Nagios says unavailable.
+
+Check in this order:
+
+A. Check web container:
+
+docker compose ps
+docker ps
+
+B. Check web logs:
+
+docker compose logs web
+
+C. Check web port:
+
+docker exec nagios /opt/nagios/libexec/check_http -H web -p 8080
+
+D. Check shared network:
+
+docker network inspect nagios-compose_monitoring-network
+
+E. Check service name.
+
+Nagios should use:
+
+web
+
+not:
+
+localhost
+
+F. Check port mapping.
+
+Nagios communicates to the container's internal port, such as 8080.
+
+The browser communicates through the host mapping, such as:
+
+localhost:8080
+
+============================================================
+SET 8 — QUESTION 2
+JENKINS PIPELINE VIEW — BUILD + TOMCAT + DOCKER
+============================================================
+
+Goal:
+Fork OLTRS, create Jenkins Pipeline, trigger with GitHub webhook, build/test with Maven, generate WAR, deploy WAR to Tomcat, create Docker image, push to Docker Hub, and show stage-wise execution.
+
+Repository:
+
+https://github.com/archanareddyse/OLTRS.git
+
+STEP 1 — Fork repository
+
+Open the OLTRS GitHub repository.
+
+Click:
+
+Fork
+
+Choose your GitHub account.
+
+You now have your own fork, for example:
+
+https://github.com/YOUR_USERNAME/OLTRS.git
+
+STEP 2 — Create Docker Hub repository
+
+Create:
+
+oltrs
+
+in your Docker Hub account.
+
+STEP 3 — Prepare Jenkins
+
+Check:
+
+git --version
+java -version
+mvn -version
+docker --version
+
+STEP 4 — Configure Jenkins tools
+
+Jenkins:
+
+Manage Jenkins
+→ Tools
+
+Configure:
+- JDK
+- Maven
+- Git
+
+STEP 5 — Add Docker Hub credentials
+
+Jenkins:
+
+Manage Jenkins
+→ Credentials
+→ Global credentials
+→ Add Credentials
+
+Kind:
+
+Username with password
+
+Username:
+
+YOUR_DOCKER_USERNAME
+
+Password:
+
+YOUR_DOCKER_PASSWORD
+
+ID:
+
+dockerhub-credentials
+
+STEP 6 — Create Pipeline job
+
+Jenkins:
+
+New Item
+→ OLTRS-Pipeline
+→ Pipeline
+→ OK
+
+STEP 7 — Enable GitHub webhook trigger
+
+Project:
+
+Configure
+→ Build Triggers
+
+Enable:
+
+GitHub hook trigger for GITScm polling
+
+Save.
+
+STEP 8 — GitHub webhook
+
+GitHub:
+
+Repository
+→ Settings
+→ Webhooks
+→ Add webhook
+
+Payload URL:
+
+http://<JENKINS_PUBLIC_ADDRESS>/github-webhook/
+
+Content type:
+
+application/json
+
+Event:
+
+Just the push event
+
+Active:
+
+Enabled
+
+Click:
+
+Add webhook
+
+STEP 9 — Create Jenkinsfile
+
+Use a Scripted Pipeline because the paper specifically asks for Pipeline activity and the scenario mentions Scripted Pipeline behavior.
+
+Example:
+
+node {
+
+    def appImage = "YOUR_DOCKER_USERNAME/oltrs:latest"
+
+    try {
+
+        stage('Checkout') {
+            git url: 'https://github.com/YOUR_USERNAME/OLTRS.git',
+                branch: 'main'
+        }
+
+        stage('Build and Test') {
+            sh 'mvn clean test package'
+        }
+
+        stage('Deploy to Tomcat') {
+            sh '''
+                sudo cp target/*.war /opt/tomcat/webapps/
+            '''
+        }
+
+        stage('Docker Build') {
+            sh "docker build -t ${appImage} ."
+        }
+
+        stage('Docker Push') {
+            withCredentials([
+                usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )
+            ]) {
+                sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker push YOUR_DOCKER_USERNAME/oltrs:latest
+                    docker logout
+                '''
+            }
+        }
+
+    } catch (err) {
+
+        mail(
+            to: 'your-email@example.com',
+            subject: "OLTRS Pipeline Failed - ${env.BUILD_NUMBER}",
+            body: "Pipeline failed. Check ${env.BUILD_URL}"
+        )
+
+        throw err
+    }
+}
+
+IMPORTANT:
+- Replace YOUR_USERNAME.
+- Replace YOUR_DOCKER_USERNAME.
+- Replace Tomcat path if your machine uses another path.
+- Jenkins must have permission to copy to /opt/tomcat/webapps.
+- If sudo requires a password, configure the Jenkins environment appropriately for the lab. Do not put a sudo password inside Jenkinsfile.
+
+STEP 10 — Verify WAR
+
+After:
+
+mvn clean test package
+
+Check:
+
+ls target
+
+Expected:
+
+*.war
+
+If the project produces a JAR instead, verify the repository configuration before changing the deployment method. The Set 8 paper specifically requires WAR generation and Tomcat deployment.
+
+STEP 11 — Verify Tomcat
+
+Example:
+
+sudo ss -tulpn | grep 8080
+
+Check Tomcat:
+
+ps -ef | grep tomcat
+
+STEP 12 — Verify deployed WAR
+
+Copying:
+
+sudo cp target/*.war /opt/tomcat/webapps/
+
+Then access:
+
+http://localhost:8080/
+
+or:
+
+http://localhost:8080/<war-name-without-.war>/
+
+STEP 13 — Run Jenkins pipeline
+
+Click:
+
+Build Now
+
+Open:
+
+Stage View
+
+Expected stages:
+
+Checkout
+Build and Test
+Deploy to Tomcat
+Docker Build
+Docker Push
+
+STEP 14 — Verify Docker Hub
+
+Open Docker Hub.
+
+Verify:
+
+YOUR_DOCKER_USERNAME/oltrs:latest
+
+exists.
+
+STEP 15 — Push a GitHub commit
+
+Make a harmless change:
+
+git add .
+git commit -m "Test pipeline"
+git push origin main
+
+The webhook should trigger Jenkins automatically.
+
+SCENARIO QUESTIONS — SET 8 Q2
+
+1. GitHub push does not trigger Jenkins.
+
+Check:
+- Correct webhook URL.
+- Jenkins is reachable from GitHub.
+- Payload type application/json.
+- Push event selected.
+- Webhook Active.
+- Jenkins job trigger enabled.
+- Correct fork/repository configured.
+- Correct branch configured.
+- GitHub webhook delivery status.
+- Jenkins build history/logs.
+
+2. Maven fails; skip Docker Build/Push.
+
+Keep Maven as a required stage:
+
+stage('Build and Test') {
+    sh 'mvn clean test package'
+}
+
+If it exits non-zero, the pipeline fails and later stages are not executed.
+
+3. Docker Hub authentication fails.
+
+Use Jenkins Credentials:
+
+credentialsId:
+dockerhub-credentials
+
+Then:
+
+withCredentials([
+    usernamePassword(...)
+]) {
+    sh '''
+       echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+       docker push ...
+       docker logout
+    '''
+}
+
+Never hard-code the password.
+
+4. Deployment fails.
+
+Open:
+
+Jenkins
+→ Job
+→ Build Number
+→ Console Output
+
+Use Stage View to identify the failed stage.
+
+For Tomcat deployment, check:
+
+ls target
+sudo ls /opt/tomcat/webapps/
+sudo ss -tulpn | grep 8080
+
+Check Tomcat logs according to the installation, commonly:
+
+/opt/tomcat/logs/catalina.out
+
+Example:
+
+sudo tail -n 50 /opt/tomcat/logs/catalina.out
+
+5. Email only on failure.
+
+Use try/catch in Scripted Pipeline:
+
+try {
+    // pipeline stages
+} catch (err) {
+    mail(
+        to: 'your-email@example.com',
+        subject: "Pipeline Failed",
+        body: "Build ${env.BUILD_NUMBER} failed: ${env.BUILD_URL}"
+    )
+    throw err
+}
+
+Success does not enter catch, so no failure email is sent.
+
+============================================================
+SET 8 — QUESTION 3
+MINIKUBE — WEB APPLICATION + NODEPORT + 4 REPLICAS
+============================================================
+
+Goal:
+Deploy the Maven web application Docker image from the student's Docker Hub repository, expose it with NodePort, scale to 4, and verify all resources.
+
+STEP 1 — Start Minikube
+
+minikube start
+
+STEP 2 — Verify
+
+minikube status
+
+STEP 3 — Verify Kubernetes node
+
+kubectl get nodes
+
+Expected:
+
+minikube   Ready
+
+STEP 4 — Create Deployment YAML
+
+Create:
+
+library-deployment.yaml
+
+Use:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: library-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: library-app
+  template:
+    metadata:
+      labels:
+        app: library-app
+    spec:
+      containers:
+      - name: library-container
+        image: YOUR_DOCKER_USERNAME/oltrs:latest
+        ports:
+        - containerPort: 8080
+
+Replace:
+YOUR_DOCKER_USERNAME
+
+Use the real application container port.
+
+STEP 5 — Apply
+
+kubectl apply -f library-deployment.yaml
+
+STEP 6 — Check Deployment
+
+kubectl get deployment library-app
+
+STEP 7 — Check Pods
+
+kubectl get pods
+
+STEP 8 — Create NodePort Service
+
+kubectl expose deployment library-app --type=NodePort --port=8080 --target-port=8080
+
+STEP 9 — Check Service
+
+kubectl get service library-app
+
+STEP 10 — Verify details
+
+kubectl describe service library-app
+
+STEP 11 — Scale to four
+
+kubectl scale deployment library-app --replicas=4
+
+STEP 12 — Verify four replicas
+
+kubectl get deployment library-app
+kubectl get pods
+
+Expected:
+
+4 Pods Running
+
+STEP 13 — Verify NodePort
+
+kubectl get service library-app
+
+The service should show a NodePort such as:
+
+8080:30xxx/TCP
+
+STEP 14 — Open application
+
+minikube service library-app
+
+Or:
+
+minikube service library-app --url
+
+STEP 15 — Verify all Kubernetes resources
+
+kubectl get nodes
+kubectl get deployments
+kubectl get pods
+kubectl get services
+
+STEP 16 — Delete Deployment
+
+kubectl delete deployment library-app
+
+STEP 17 — Delete Service
+
+kubectl delete service library-app
+
+STEP 18 — Verify removal
+
+kubectl get deployments
+kubectl get services
+kubectl get pods
+
+The Deployment and Service should no longer exist.
+
+SCENARIO QUESTIONS — SET 8 Q3
+
+1. Scale from 2 to 4.
+
+kubectl scale deployment library-app --replicas=4
+
+Verify:
+
+kubectl get deployment library-app
+kubectl get pods
+
+2. Pods running but external access fails.
+
+Check:
+
+kubectl get services
+kubectl describe service library-app
+
+The application should be exposed through NodePort:
+
+kubectl expose deployment library-app --type=NodePort --port=8080 --target-port=8080
+
+Then:
+
+minikube service library-app
+
+Also verify targetPort matches the container's listening port.
+
+3. Only 2 of 4 Pods Running.
+
+Use:
+
+kubectl get pods
+kubectl describe deployment library-app
+kubectl describe pod <pod-name>
+kubectl get events --sort-by=.metadata.creationTimestamp
+kubectl logs <pod-name>
+
+Look for:
+- ImagePullBackOff
+- ErrImagePull
+- CrashLoopBackOff
+- insufficient resources
+- wrong image/tag
+- application startup failure
+
+4. ENDPOINTS = <none>.
+
+Check labels:
+
+kubectl get pods --show-labels
+
+Check Service:
+
+kubectl describe service library-app
+
+The Service selector must match the Deployment Pod label.
+
+Example:
+
+Pod label:
+app: library-app
+
+Service selector:
+app: library-app
+
+If different, fix the YAML and apply it again:
+
+kubectl apply -f service.yaml
+
+5. Delete after testing.
+
+kubectl delete deployment library-app
+kubectl delete service library-app
+
+Verify:
+
+kubectl get deployments
+kubectl get services
+kubectl get pods
+
+============================================================
+SET 8 — QUESTION 4
+AWS EC2 — WEB APPLICATION DEPLOYMENT
+============================================================
+
+Goal:
+Launch EC2, configure Security Group, clone source, deploy application, and access through Public IPv4/Public DNS.
+
+STEP 1 — Start AWS Academy Lab
+
+Open AWS Academy.
+
+Click:
+
+Start Lab
+
+Wait for active status.
+
+Click:
+
+AWS
+
+to open Management Console.
+
+STEP 2 — Open EC2
+
+Search:
+
+EC2
+
+Open:
+
+EC2
+→ Instances
+
+STEP 3 — Launch instance
+
+Click:
+
+Launch instances
+
+Choose:
+
+Name:
+Library-server
+
+AMI:
+Amazon Linux 2023
+
+Instance type:
+Use the type permitted by the lab.
+
+STEP 4 — Key pair
+
+Select/create the permitted key pair.
+
+STEP 5 — Security Group
+
+Inbound:
+
+SSH
+TCP
+22
+Source: My IP
+
+HTTP
+TCP
+80
+Source: Anywhere-IPv4
+
+If application is on 8080:
+
+Custom TCP
+TCP
+8080
+Source: Anywhere-IPv4
+
+Outbound:
+Keep the normal allowed outbound rule unless the lab requires a specific restriction.
+
+STEP 6 — Launch
+
+Click:
+
+Launch instance
+
+STEP 7 — Wait for checks
+
+Instance state:
+
+Running
+
+Status checks:
+
+3/3 checks passed
+
+STEP 8 — Connect
+
+Select instance:
+
+Connect
+→ EC2 Instance Connect
+→ Connect
+
+STEP 9 — Install/check Git
+
+git --version
+
+If missing:
+
+sudo dnf install git -y
+
+STEP 10 — Install/check Java
+
+java -version
+
+Install/configure Java version required by the application if missing.
+
+STEP 11 — Install/check Maven
+
+mvn -version
+
+If missing:
+
+sudo dnf install maven -y
+
+STEP 12 — Clone web application
+
+The Set 8 paper requires cloning the web application source from the specified GitHub repository.
+
+Use your fork:
+
+cd ~
+git clone https://github.com/YOUR_USERNAME/OLTRS.git
+
+Enter:
+
+cd OLTRS
+
+STEP 13 — Inspect project
+
+ls
+
+Look for:
+
+pom.xml
+src
+
+STEP 14 — Build
+
+mvn clean package
+
+Expected:
+
+BUILD SUCCESS
+
+STEP 15 — Check generated WAR
+
+ls target
+
+Look for:
+
+*.war
+
+STEP 16 — Install/use Tomcat
+
+If Tomcat is already installed, use it.
+
+If your lab requires manual Tomcat setup, use the version/package supplied by your environment.
+
+Deploy:
+
+sudo cp target/*.war /opt/tomcat/webapps/
+
+STEP 17 — Start Tomcat
+
+Example:
+
+/opt/tomcat/bin/startup.sh
+
+Check:
+
+ps -ef | grep tomcat
+
+STEP 18 — Check port
+
+sudo ss -tulpn | grep 8080
+
+STEP 19 — Test from EC2 itself
+
+curl http://localhost:8080/
+
+If the application has a context path:
+
+curl http://localhost:8080/<application-context>/
+
+STEP 20 — Get public address
+
+EC2:
+
+Instances
+→ select instance
+
+Copy:
+
+Public IPv4 address
+
+or:
+
+Public IPv4 DNS
+
+STEP 21 — Browser access
+
+Open:
+
+http://<PUBLIC-IP>:8080/
+
+If configured through HTTP port 80:
+
+http://<PUBLIC-IP>/
+
+If it does not open, continue with Security Group/network checks.
+
+SCENARIO QUESTIONS — SET 8 Q4
+
+1. SSH connection fails.
+
+Check:
+- Instance is Running.
+- Status checks pass.
+- Correct SSH username.
+- Correct key pair.
+- Key permissions if using local SSH.
+- Security Group allows TCP 22.
+- Source matches administrator IP.
+- Public IPv4/DNS exists.
+- Route/network path exists.
+
+For Amazon Linux:
+
+ec2-user
+
+is commonly the SSH user.
+
+2. Application works at 8080 but not public IP.
+
+Check:
+
+A. Application listening:
+
+sudo ss -tulpn | grep 8080
+
+B. Local test:
+
+curl http://localhost:8080/
+
+C. Security Group:
+
+TCP 8080 → allowed source.
+
+D. Application bind address.
+
+It must listen on a reachable interface, not only localhost/127.0.0.1.
+
+E. Correct URL:
+
+http://<PUBLIC-IP>:8080/
+
+3. No Public IPv4.
+
+Use an AWS networking/addressing solution such as:
+
+- Public IPv4 assignment when launching/reconfiguring the instance, where permitted.
+- Elastic IP for a persistent public address.
+- Public subnet with route to an Internet Gateway.
+- Security Group rule allowing application traffic.
+
+For the lab, use the method allowed by AWS Academy.
+
+4. Preserve data after stop/start.
+
+Use persistent EBS storage.
+
+For important application data:
+- Create/attach an EBS volume.
+- Mount it at the required directory.
+- Store persistent application/database data there.
+
+EBS data normally persists across instance stop/start.
+
+If the requirement extends to instance TERMINATION, check the volume's DeleteOnTermination setting and use a persistent data volume where appropriate.
+
+5. Allow HTTP and restrict SSH.
+
+Security Group inbound:
+
+HTTP
+TCP
+80
+Source: 0.0.0.0/0
+
+SSH
+TCP
+22
+Source: administrator IP / My IP
+
+Do not allow:
+
+SSH → 0.0.0.0/0
+
+unless temporarily required for the lab.
+
+============================================================
+SET 8 — QUICK FINAL REVISION
+============================================================
+
+Q1 Docker + Nagios:
+
+docker compose config
+docker compose up -d
+docker compose ps
+docker compose logs
+docker network inspect <network>
+docker exec nagios /opt/nagios/libexec/check_http -H web -p 8080
+docker compose stop
+docker compose start
+docker compose down
+docker compose stop <service>
+
+Q2 Jenkins:
+
+Fork GitHub repo
+→ Jenkins Pipeline
+→ GitHub webhook
+→ Checkout
+→ Maven test/package
+→ WAR
+→ Tomcat
+→ Docker build
+→ Docker login
+→ Docker push
+→ Stage View
+→ Failure email
+
+Q3 Kubernetes:
+
+minikube start
+kubectl get nodes
+kubectl apply -f library-deployment.yaml
+kubectl get deployment
+kubectl get pods
+kubectl expose deployment library-app --type=NodePort --port=8080 --target-port=8080
+kubectl scale deployment library-app --replicas=4
+kubectl get services
+minikube service library-app
+kubectl delete deployment library-app
+kubectl delete service library-app
+
+Q4 AWS:
+
+Start Lab
+→ AWS Console
+→ EC2
+→ Launch instance
+→ Security Group
+→ SSH 22
+→ HTTP 80
+→ 8080 if required
+→ Connect
+→ Git
+→ Java
+→ Maven
+→ Clone
+→ mvn clean package
+→ WAR
+→ Tomcat
+→ Public IP/DNS
+→ Browser
+
+END OF SET 8

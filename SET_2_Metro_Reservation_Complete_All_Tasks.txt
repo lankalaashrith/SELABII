@@ -1,0 +1,2001 @@
+SOFTWARE ENGINEERING LAB INTERNAL II
+SET 2 — COMPLETE PRACTICAL PROCEDURE
+Keshav Memorial Institute of Technology
+A.Y. 2026-2027
+Subject: Software Engineering — 23CC501PC
+
+IMPORTANT:
+This SET-2 file is based on the uploaded SET-2.docx.
+Repository given in the paper:
+https://github.com/deepthisagar7/metro-reservation.git
+
+SET 2 contains:
+A) Docker — Multi-Container Application
+B) Jenkins — Freestyle Project
+C) Nagios — System Monitoring
+D) Kubernetes — Container Scaling
+E) AWS Deployment using EC2
+
+============================================================
+A) DOCKER — MULTI-CONTAINER APPLICATION
+============================================================
+
+GOAL:
+Deploy the Metro Reservation Java web application in one Docker
+container and MySQL in another container. Connect both containers
+and access the application through a browser.
+
+Paper requirements:
+1. Pull Tomcat and MySQL images.
+2. Build the Metro Reservation WAR.
+3. Configure application and database containers.
+4. Establish communication between containers.
+5. Access the application through a browser.
+
+------------------------------------------------------------
+A1. CHECK DOCKER
+------------------------------------------------------------
+
+docker --version
+
+docker ps
+
+If Docker is running, continue.
+
+------------------------------------------------------------
+A2. PULL REQUIRED IMAGES
+------------------------------------------------------------
+
+Pull Tomcat:
+
+docker pull tomcat:10
+
+Pull MySQL:
+
+docker pull mysql:5.7
+
+Check:
+
+docker images
+
+You should see the Tomcat and MySQL images.
+
+------------------------------------------------------------
+A3. CLONE THE METRO RESERVATION PROJECT
+------------------------------------------------------------
+
+If Git is not installed:
+
+sudo dnf install git -y
+
+Check:
+
+git --version
+
+Clone:
+
+git clone https://github.com/deepthisagar7/metro-reservation.git
+
+Enter project:
+
+cd metro-reservation
+
+Check files:
+
+ls
+
+Look for:
+
+pom.xml
+src
+
+------------------------------------------------------------
+A4. CHECK JAVA AND MAVEN
+------------------------------------------------------------
+
+Check Java:
+
+java -version
+
+Check Maven:
+
+mvn -version
+
+If Maven is missing on Amazon Linux:
+
+sudo dnf install maven -y
+
+Then:
+
+mvn -version
+
+------------------------------------------------------------
+A5. BUILD THE WAR FILE
+------------------------------------------------------------
+
+Inside the Metro Reservation project:
+
+mvn clean package
+
+If successful, look for:
+
+BUILD SUCCESS
+
+Check target:
+
+ls target
+
+Look for:
+
+metro-reservation.war
+
+IMPORTANT:
+The paper specifically expects a WAR file.
+Do not use a JAR-only setup for this task.
+
+If the WAR filename is different, use the actual WAR filename shown by:
+
+ls target/*.war
+
+------------------------------------------------------------
+A6. CHECK WAR FILE
+------------------------------------------------------------
+
+Run:
+
+ls -lh target/*.war
+
+Optional:
+
+jar tf target/metro-reservation.war | head
+
+This confirms that the WAR is a web application archive.
+
+------------------------------------------------------------
+A7. CREATE DOCKER NETWORK
+------------------------------------------------------------
+
+Create:
+
+docker network create metro-network
+
+Check:
+
+docker network ls
+
+You should see:
+
+metro-network
+
+The application and MySQL containers will communicate through
+this network.
+
+------------------------------------------------------------
+A8. CREATE PERSISTENT MYSQL VOLUME
+------------------------------------------------------------
+
+docker volume create metro-mysql-data
+
+Check:
+
+docker volume ls
+
+You should see:
+
+metro-mysql-data
+
+This keeps database files outside the MySQL container.
+
+------------------------------------------------------------
+A9. RUN MYSQL CONTAINER
+------------------------------------------------------------
+
+Use:
+
+docker run -d \
+--name metro-mysql \
+--network metro-network \
+-e MYSQL_ROOT_PASSWORD=root \
+-e MYSQL_DATABASE=metrodb \
+-e MYSQL_USER=metrouser \
+-e MYSQL_PASSWORD=metropass \
+-v metro-mysql-data:/var/lib/mysql \
+mysql:5.7
+
+Check:
+
+docker ps
+
+Check MySQL logs:
+
+docker logs metro-mysql
+
+Wait until MySQL has initialized.
+
+------------------------------------------------------------
+A10. CREATE APPLICATION DOCKERFILE
+------------------------------------------------------------
+
+Inside the Metro Reservation project directory create:
+
+Dockerfile
+
+Use:
+
+FROM tomcat:10
+
+COPY target/metro-reservation.war /usr/local/tomcat/webapps/metro-reservation.war
+
+EXPOSE 8080
+
+IMPORTANT:
+If your built WAR has another filename, replace
+metro-reservation.war with the actual filename.
+
+------------------------------------------------------------
+A11. BUILD APPLICATION DOCKER IMAGE
+------------------------------------------------------------
+
+Inside the project directory:
+
+docker build -t metro-reservation:1.0 .
+
+Check:
+
+docker images
+
+You should see:
+
+metro-reservation
+
+------------------------------------------------------------
+A12. RUN APPLICATION CONTAINER
+------------------------------------------------------------
+
+docker run -d \
+--name metro-app \
+--network metro-network \
+-p 8080:8080 \
+metro-reservation:1.0
+
+Check:
+
+docker ps
+
+You should have:
+
+metro-mysql
+metro-app
+
+------------------------------------------------------------
+A13. CHECK CONTAINER NETWORK
+------------------------------------------------------------
+
+docker network inspect metro-network
+
+Verify that both:
+
+metro-mysql
+metro-app
+
+are connected to the same network.
+
+------------------------------------------------------------
+A14. DATABASE CONNECTION
+------------------------------------------------------------
+
+The application container should use the MySQL container name as
+the database host.
+
+Database host:
+
+metro-mysql
+
+Database port:
+
+3306
+
+Database name:
+
+metrodb
+
+Database user:
+
+metrouser
+
+Database password:
+
+metropass
+
+IMPORTANT:
+The exact database property names depend on the Metro Reservation
+project's configuration.
+
+Check the project configuration files for database settings.
+
+Useful command:
+
+grep -R "mysql" src .
+
+Also check:
+
+application.properties
+application.yml
+context.xml
+persistence.xml
+
+if present.
+
+The important Docker networking idea is:
+
+metro-app
+    |
+    | network: metro-network
+    |
+metro-mysql
+
+Do NOT use localhost for the MySQL host from inside the application
+container. localhost would mean the application container itself.
+
+------------------------------------------------------------
+A15. CHECK APPLICATION LOGS
+------------------------------------------------------------
+
+docker logs metro-app
+
+Look for Tomcat startup messages or database connection errors.
+
+Follow logs live:
+
+docker logs -f metro-app
+
+Press:
+
+Ctrl + C
+
+to stop following the logs.
+
+------------------------------------------------------------
+A16. ACCESS APPLICATION
+------------------------------------------------------------
+
+Open browser:
+
+http://localhost:8080/metro-reservation/
+
+If the WAR is deployed as ROOT instead, use:
+
+http://localhost:8080/
+
+If the application uses another context path, use that context path.
+
+Check the browser and verify the Metro Reservation application.
+
+------------------------------------------------------------
+A17. TEST MYSQL CONTAINER FAILURE
+------------------------------------------------------------
+
+Stop MySQL:
+
+docker stop metro-mysql
+
+Check:
+
+docker ps
+
+The application container may still be running, but database operations
+will fail because MySQL is unavailable.
+
+This demonstrates what happens when the database container stops.
+
+------------------------------------------------------------
+A18. RECOVER MYSQL
+------------------------------------------------------------
+
+docker start metro-mysql
+
+Check:
+
+docker ps
+
+Check logs:
+
+docker logs metro-mysql
+
+The application should be able to reconnect once MySQL is available,
+depending on the application's database connection behavior.
+
+------------------------------------------------------------
+A19. TEST DATABASE PERSISTENCE
+------------------------------------------------------------
+
+Delete the MySQL container:
+
+docker rm -f metro-mysql
+
+DO NOT delete:
+
+metro-mysql-data
+
+Check:
+
+docker volume ls
+
+The volume must still exist.
+
+------------------------------------------------------------
+A20. RECREATE MYSQL USING SAME VOLUME
+------------------------------------------------------------
+
+docker run -d \
+--name metro-mysql \
+--network metro-network \
+-e MYSQL_ROOT_PASSWORD=root \
+-e MYSQL_DATABASE=metrodb \
+-e MYSQL_USER=metrouser \
+-e MYSQL_PASSWORD=metropass \
+-v metro-mysql-data:/var/lib/mysql \
+mysql:5.7
+
+Check:
+
+docker ps
+
+The database files remain in:
+
+metro-mysql-data
+
+Therefore deleting the container does not automatically delete
+the database volume.
+
+------------------------------------------------------------
+A21. FINAL DOCKER CHECK
+------------------------------------------------------------
+
+docker ps
+
+docker images
+
+docker network inspect metro-network
+
+docker volume ls
+
+docker logs metro-app
+
+Then open the application in the browser again.
+
+------------------------------------------------------------
+A22. DOCKER SCENARIO QUESTIONS
+------------------------------------------------------------
+
+1. What happens if MySQL stops while passengers are accessing the
+Metro Reservation application?
+
+Answer:
+Database-dependent operations fail because the application cannot
+read or write reservation data. The application container may remain
+running, but database operations become unavailable.
+
+2. How can reservation data be preserved after deleting MySQL?
+
+Answer:
+Use a persistent Docker volume mounted to:
+
+/var/lib/mysql
+
+For example:
+
+-v metro-mysql-data:/var/lib/mysql
+
+The container can be deleted and recreated using the same volume.
+
+3. Why use separate application and MySQL containers?
+
+Answer:
+They are independent services. The application and database can be
+managed, restarted, scaled and updated separately.
+
+4. How can unauthorized access to passenger/reservation information
+be prevented?
+
+Answer:
+Restrict database exposure, avoid publishing MySQL port unnecessarily,
+use strong database credentials, use a private Docker network and
+apply proper application authentication and authorization.
+
+5. How troubleshoot application-to-MySQL connection failure?
+
+Check:
+
+docker ps
+docker logs metro-app
+docker logs metro-mysql
+docker network inspect metro-network
+
+Verify:
+- MySQL container is running.
+- Both containers share the same network.
+- Database hostname is metro-mysql.
+- Port is 3306.
+- Database name/user/password are correct.
+- MySQL has completed initialization.
+
+============================================================
+B) JENKINS — FREESTYLE PROJECT
+============================================================
+
+GOAL:
+Create and configure a Jenkins Freestyle Project to build the
+Metro Reservation Java web application using Maven.
+
+Paper expected:
+1. Configure Metro Reservation GitHub repository.
+2. Configure JDK and Maven.
+3. Execute Maven build successfully.
+4. Generate metro-reservation.war.
+5. Verify build status and console output.
+
+------------------------------------------------------------
+B1. START JENKINS
+------------------------------------------------------------
+
+Open:
+
+http://localhost:8080
+
+Login to Jenkins.
+
+------------------------------------------------------------
+B2. CREATE FREESTYLE PROJECT
+------------------------------------------------------------
+
+Click:
+
+New Item
+
+Enter:
+
+Metro-Reservation-CI
+
+Select:
+
+Freestyle project
+
+Click:
+
+OK
+
+------------------------------------------------------------
+B3. CONFIGURE GITHUB
+------------------------------------------------------------
+
+Go to:
+
+Source Code Management
+
+Select:
+
+Git
+
+Repository URL:
+
+https://github.com/deepthisagar7/metro-reservation.git
+
+Branch Specifier:
+
+*/main
+
+If the repository actually uses another branch, use that branch.
+
+------------------------------------------------------------
+B4. CONFIGURE JDK AND MAVEN
+------------------------------------------------------------
+
+Go to:
+
+Manage Jenkins
+→ Tools
+
+Configure JDK.
+
+Use Java 17 if the Metro Reservation pom.xml requires Java 17.
+
+Example:
+
+C:\Program Files\Java\jdk-17
+
+Configure Maven.
+
+Example:
+
+Name:
+Maven-3.9.16
+
+Path:
+
+C:\apache-maven-3.9.16\apache-maven-3.9.16
+
+Save.
+
+------------------------------------------------------------
+B5. ADD MAVEN BUILD STEP
+------------------------------------------------------------
+
+Open:
+
+Metro-Reservation-CI
+→ Configure
+
+Find:
+
+Build Steps
+
+Click:
+
+Add build step
+
+Select:
+
+Invoke top-level Maven targets
+
+Select Maven:
+
+Maven-3.9.16
+
+Goals:
+
+clean test package
+
+This performs:
+
+clean
+→ remove previous build output
+
+test
+→ execute tests
+
+package
+→ generate the WAR/JAR according to pom.xml
+
+For this SET-2 project, the expected artifact is:
+
+metro-reservation.war
+
+------------------------------------------------------------
+B6. ARCHIVE WAR
+------------------------------------------------------------
+
+Find:
+
+Post-build Actions
+
+Select:
+
+Archive the artifacts
+
+Use:
+
+target/*.war
+
+Save.
+
+------------------------------------------------------------
+B7. RUN BUILD
+------------------------------------------------------------
+
+Open:
+
+Metro-Reservation-CI
+
+Click:
+
+Build Now
+
+Open the generated build number.
+
+Click:
+
+Console Output
+
+Wait for:
+
+BUILD SUCCESS
+
+Check for output similar to:
+
+Building war:
+.../target/metro-reservation.war
+
+------------------------------------------------------------
+B8. VERIFY WAR
+------------------------------------------------------------
+
+Open the successful build.
+
+Look for:
+
+Artifacts
+
+You should see:
+
+metro-reservation.war
+
+This proves Jenkins generated and archived the WAR.
+
+------------------------------------------------------------
+B9. CHECK FAILED BUILD BEHAVIOR
+------------------------------------------------------------
+
+If the source code has a compilation error:
+
+Maven compilation fails.
+
+Jenkins marks the build:
+
+FAILURE
+
+If compilation succeeds but tests fail:
+
+The Maven test phase fails and Jenkins marks the build:
+
+FAILURE
+
+After demonstration, restore the correct source and run:
+
+clean test package
+
+again.
+
+------------------------------------------------------------
+B10. JENKINS SCENARIO QUESTIONS
+------------------------------------------------------------
+
+1. What happens if a developer introduces compilation errors?
+
+Answer:
+Jenkins checks out the changed GitHub code and runs the Maven build.
+If compilation fails, Maven returns a failure and Jenkins marks the
+build as failed. The console output shows the compilation error.
+
+2. How can Jenkins detect GitHub changes?
+
+Answer:
+Use a build trigger such as Poll SCM. Jenkins periodically checks
+the configured repository/branch for changes.
+
+3. Difference between generating WAR and deploying on Tomcat?
+
+Answer:
+Generating the WAR only creates the packaged web application.
+Deployment means copying/running that WAR in a web server such as
+Tomcat so users can access it.
+
+4. Why is Maven useful?
+
+Answer:
+Maven manages dependencies, compiles the project, runs tests and
+packages the application using the pom.xml configuration instead of
+manually downloading JAR files.
+
+5. How troubleshoot an incorrect pom.xml?
+
+Answer:
+Open Jenkins Console Output and find the first Maven error.
+Check:
+- XML syntax
+- groupId/artifactId/version
+- dependencies
+- plugins
+- Java version
+- packaging
+- repository URLs
+
+Then fix pom.xml and run:
+
+mvn clean package
+
+After it succeeds, run the Jenkins build again.
+
+============================================================
+C) NAGIOS — SYSTEM MONITORING
+============================================================
+
+GOAL:
+Monitor the Metro Reservation application server using Nagios.
+
+Paper expected:
+1. Pull/run Nagios Docker image.
+2. Configure monitoring.
+3. Monitor CPU, memory, disk and uptime.
+4. Configure HTTP monitoring.
+5. Display monitoring status and alerts.
+
+------------------------------------------------------------
+C1. PULL NAGIOS
+------------------------------------------------------------
+
+docker pull jasonrivers/nagios:latest
+
+Check:
+
+docker images
+
+------------------------------------------------------------
+C2. RUN NAGIOS
+------------------------------------------------------------
+
+docker run -d \
+--name nagios \
+-p 8082:80 \
+jasonrivers/nagios:latest
+
+Check:
+
+docker ps
+
+------------------------------------------------------------
+C3. OPEN NAGIOS
+------------------------------------------------------------
+
+Open:
+
+http://localhost:8082
+
+Default username:
+
+nagiosadmin
+
+If the default password in your image/lab does not work, reset it:
+
+docker exec -it nagios htpasswd -b /opt/nagios/etc/htpasswd.users nagiosadmin nagiosadmin
+
+Restart:
+
+docker restart nagios
+
+Then try:
+
+Username:
+nagiosadmin
+
+Password:
+nagiosadmin
+
+------------------------------------------------------------
+C4. CHECK NAGIOS PLUGINS
+------------------------------------------------------------
+
+Check HTTP plugin:
+
+docker exec nagios ls /opt/nagios/libexec/check_http
+
+Check disk plugin:
+
+docker exec nagios ls /opt/nagios/libexec/check_disk
+
+Check load plugin:
+
+docker exec nagios ls /opt/nagios/libexec/check_load
+
+List plugins:
+
+docker exec nagios ls /opt/nagios/libexec/
+
+------------------------------------------------------------
+C5. CONNECT NAGIOS TO DOCKER NETWORK
+------------------------------------------------------------
+
+If the Metro Reservation Docker setup uses:
+
+metro-network
+
+connect Nagios:
+
+docker network connect metro-network nagios
+
+Check:
+
+docker network inspect metro-network
+
+Nagios and the application container should be able to communicate
+through the Docker network.
+
+------------------------------------------------------------
+C6. HTTP CHECK
+------------------------------------------------------------
+
+If the application container is named:
+
+metro-app
+
+and Tomcat listens on port 8080 inside the container:
+
+docker exec nagios /opt/nagios/libexec/check_http -H metro-app -p 8080
+
+If the application is exposed differently, use the correct internal
+container port.
+
+Expected successful result:
+
+HTTP OK
+
+------------------------------------------------------------
+C7. APPLICATION FAILURE DEMONSTRATION
+------------------------------------------------------------
+
+Stop application:
+
+docker stop metro-app
+
+Check HTTP service:
+
+docker exec nagios /opt/nagios/libexec/check_http -H metro-app -p 8080
+
+The check should report a failure/CRITICAL condition.
+
+This demonstrates application monitoring.
+
+------------------------------------------------------------
+C8. RECOVER APPLICATION
+------------------------------------------------------------
+
+docker start metro-app
+
+Check again:
+
+docker exec nagios /opt/nagios/libexec/check_http -H metro-app -p 8080
+
+Expected:
+
+HTTP OK
+
+------------------------------------------------------------
+C9. DISK MONITORING
+------------------------------------------------------------
+
+Run:
+
+docker exec nagios /opt/nagios/libexec/check_disk -w 20% -c 10%
+
+Meaning:
+
+More than 20% free:
+OK
+
+20% or less free:
+WARNING
+
+10% or less free:
+CRITICAL
+
+------------------------------------------------------------
+C10. CPU/LOAD MONITORING
+------------------------------------------------------------
+
+Check plugin:
+
+docker exec nagios ls /opt/nagios/libexec/check_load
+
+If available:
+
+docker exec nagios /opt/nagios/libexec/check_load
+
+The load plugin checks system load values.
+
+------------------------------------------------------------
+C11. MEMORY MONITORING
+------------------------------------------------------------
+
+List plugins:
+
+docker exec nagios ls /opt/nagios/libexec/
+
+Look for a memory monitoring plugin.
+
+If a suitable memory plugin is not available in the image,
+do not invent a plugin command. Use the available Nagios plugin
+or explain that memory monitoring requires the corresponding
+plugin/configuration.
+
+------------------------------------------------------------
+C12. DATABASE MONITORING
+------------------------------------------------------------
+
+Check whether MySQL plugin exists:
+
+docker exec nagios ls /opt/nagios/libexec/check_mysql
+
+If it exists, use it according to its supported syntax.
+
+If it does not exist, do not execute a nonexistent command.
+
+You can still demonstrate HTTP application monitoring and explain
+that MySQL monitoring requires a compatible Nagios database plugin.
+
+------------------------------------------------------------
+C13. NAGIOS DASHBOARD
+------------------------------------------------------------
+
+Open:
+
+http://localhost:8082
+
+Show:
+
+Hosts
+Services
+OK
+WARNING
+CRITICAL
+
+Demonstration flow:
+
+Application running
+↓
+HTTP check OK
+↓
+Stop application
+↓
+Nagios detects failure
+↓
+Start application
+↓
+HTTP check returns OK
+
+------------------------------------------------------------
+C14. NAGIOS SCENARIO QUESTIONS
+------------------------------------------------------------
+
+1. How identify whether the Metro Reservation server is running/down?
+
+Answer:
+Nagios uses host/service checks. If the monitored service or host
+does not respond within configured limits, Nagios changes the status
+from OK to WARNING/CRITICAL depending on the check.
+
+2. Difference between WARNING and CRITICAL?
+
+Answer:
+WARNING means the monitored value has crossed a warning threshold
+or has a problem that is not considered severe enough for critical.
+CRITICAL indicates a serious failure or a critical threshold.
+
+3. What happens if CPU reaches 100%?
+
+Answer:
+The server can become slow and requests may be delayed or fail.
+Nagios can detect high load/CPU through the configured monitoring
+plugin and produce an alert.
+
+4. How identify application unavailable while server is running?
+
+Answer:
+Monitor the application service itself, for example with an HTTP
+check. The EC2/server can remain up while the HTTP/Tomcat service
+returns an error or stops.
+
+5. How identify Tomcat vs MySQL vs server failure?
+
+Answer:
+Use separate checks:
+- Host check → server/network availability
+- HTTP/Tomcat check → web application availability
+- MySQL check → database availability
+- Network connectivity checks → communication problems
+
+============================================================
+D) KUBERNETES — CONTAINER SCALING
+============================================================
+
+GOAL:
+Demonstrate scaling of the Metro Reservation application using
+Kubernetes.
+
+Paper expected:
+1. Create Docker image.
+2. Create Kubernetes Deployment.
+3. Check running Pods.
+4. Scale replicas.
+5. Verify scaling.
+6. Demonstrate automatic Pod recreation.
+
+------------------------------------------------------------
+D1. CHECK KUBERNETES
+------------------------------------------------------------
+
+minikube status
+
+If Minikube is not running:
+
+minikube start
+
+Check:
+
+kubectl get nodes
+
+------------------------------------------------------------
+D2. MAKE SURE APPLICATION IMAGE EXISTS
+------------------------------------------------------------
+
+Check:
+
+docker images
+
+You should have:
+
+metro-reservation:1.0
+
+If the image does not exist, build it again:
+
+docker build -t metro-reservation:1.0 .
+
+------------------------------------------------------------
+D3. IMPORTANT — IMAGE AVAILABILITY IN MINIKUBE
+------------------------------------------------------------
+
+If Minikube uses its own container runtime, load the local image:
+
+minikube image load metro-reservation:1.0
+
+Check:
+
+minikube image ls | grep metro-reservation
+
+This makes the local Docker image available to the Minikube node.
+
+------------------------------------------------------------
+D4. CREATE DEPLOYMENT YAML
+------------------------------------------------------------
+
+Create:
+
+metro-deployment.yaml
+
+Use:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metro-reservation
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: metro-reservation
+  template:
+    metadata:
+      labels:
+        app: metro-reservation
+    spec:
+      containers:
+      - name: metro-container
+        image: metro-reservation:1.0
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+
+IMPORTANT:
+If your Dockerfile/application uses another internal port, change
+containerPort accordingly.
+
+------------------------------------------------------------
+D5. APPLY DEPLOYMENT
+------------------------------------------------------------
+
+kubectl apply -f metro-deployment.yaml
+
+Check:
+
+kubectl get deployments
+
+Check Pods:
+
+kubectl get pods
+
+You should initially have:
+
+2 Pods
+
+Wait until they become:
+
+Running
+
+------------------------------------------------------------
+D6. CHECK POD DETAILS
+------------------------------------------------------------
+
+kubectl get pods -o wide
+
+For detailed information:
+
+kubectl describe pod <pod-name>
+
+Replace:
+
+<pod-name>
+
+with an actual Pod name.
+
+------------------------------------------------------------
+D7. CREATE SERVICE
+------------------------------------------------------------
+
+Expose the Deployment:
+
+kubectl expose deployment metro-reservation \
+--type=NodePort \
+--port=8080
+
+Check:
+
+kubectl get services
+
+You should see a NodePort.
+
+------------------------------------------------------------
+D8. OPEN APPLICATION
+------------------------------------------------------------
+
+Use:
+
+minikube service metro-reservation
+
+This opens the Service in the browser.
+
+If needed, get the URL:
+
+minikube service metro-reservation --url
+
+Open the displayed URL.
+
+------------------------------------------------------------
+D9. SCALE UP
+------------------------------------------------------------
+
+Scale from 2 to 5 replicas:
+
+kubectl scale deployment metro-reservation --replicas=5
+
+Check:
+
+kubectl get deployment
+
+Check Pods:
+
+kubectl get pods
+
+You should have:
+
+5 Pods
+
+------------------------------------------------------------
+D10. DEMONSTRATE POD RECREATION
+------------------------------------------------------------
+
+List Pods:
+
+kubectl get pods
+
+Copy one Pod name.
+
+Delete it:
+
+kubectl delete pod <pod-name>
+
+Immediately check:
+
+kubectl get pods
+
+Kubernetes automatically creates a replacement Pod because the
+Deployment's desired replica count is 5.
+
+------------------------------------------------------------
+D11. VERIFY REPLICA COUNT
+------------------------------------------------------------
+
+kubectl get deployment metro-reservation
+
+Check:
+
+DESIRED
+CURRENT
+READY
+
+The final desired count should be:
+
+5
+
+------------------------------------------------------------
+D12. SCALING DOWN
+------------------------------------------------------------
+
+If you need to return to two replicas:
+
+kubectl scale deployment metro-reservation --replicas=2
+
+Check:
+
+kubectl get pods
+
+------------------------------------------------------------
+D13. KUBERNETES SCENARIO QUESTIONS
+------------------------------------------------------------
+
+1. What happens if one Pod crashes?
+
+Answer:
+The Deployment controller notices that the actual number of Pods
+is below the desired number and creates a replacement Pod.
+
+2. How does Kubernetes maintain the desired replicas?
+
+Answer:
+A Deployment continuously compares the desired state with the
+actual state and creates/removes Pods as required.
+
+3. Difference between scaling up and scaling down?
+
+Answer:
+Scaling up increases the number of application replicas.
+Scaling down decreases the number.
+
+Example:
+
+2 → 5 = scale up
+
+5 → 2 = scale down
+
+4. How does more replicas help during peak reservation hours?
+
+Answer:
+Requests can be handled by multiple application instances instead
+of one instance, improving capacity and reducing the load on each Pod.
+
+5. How can Kubernetes distribute requests?
+
+Answer:
+A Kubernetes Service provides a stable endpoint and routes traffic
+to the Pods selected by its labels.
+
+============================================================
+E) AWS DEPLOYMENT USING EC2
+============================================================
+
+GOAL:
+Deploy the Metro Reservation Java web application on an AWS EC2
+instance and make it accessible through the EC2 public IP address.
+
+Paper expected:
+1. Launch/configure EC2.
+2. Access application through public IP.
+
+------------------------------------------------------------
+E1. START AWS ACADEMY LAB
+------------------------------------------------------------
+
+Open AWS Academy Learner Lab.
+
+Click:
+
+Start Lab
+
+Wait until the lab becomes active.
+
+Click:
+
+AWS
+
+to open AWS Management Console.
+
+------------------------------------------------------------
+E2. OPEN EC2
+------------------------------------------------------------
+
+In AWS Console:
+
+Search:
+
+EC2
+
+Open:
+
+EC2
+
+Then:
+
+Instances
+
+------------------------------------------------------------
+E3. LAUNCH EC2
+------------------------------------------------------------
+
+Click:
+
+Launch instances
+
+Set name:
+
+Metro-server
+
+Choose an allowed Amazon Linux AMI.
+
+Example:
+
+Amazon Linux 2023
+
+Choose an allowed instance type.
+
+Example:
+
+t3.micro
+
+Use the instance type permitted by your Academy lab.
+
+------------------------------------------------------------
+E4. KEY PAIR
+------------------------------------------------------------
+
+Select an existing permitted key pair or create one if the lab
+allows it.
+
+The key pair is used for SSH access.
+
+Keep the key safe.
+
+------------------------------------------------------------
+E5. SECURITY GROUP
+------------------------------------------------------------
+
+Create/select a Security Group.
+
+Inbound rule for SSH:
+
+Type:
+SSH
+
+Protocol:
+TCP
+
+Port:
+22
+
+Source:
+My IP
+
+Inbound rule for HTTP:
+
+Type:
+HTTP
+
+Protocol:
+TCP
+
+Port:
+80
+
+Source:
+Anywhere-IPv4
+
+If Tomcat/application runs directly on port 8080, add:
+
+Type:
+Custom TCP
+
+Protocol:
+TCP
+
+Port:
+8080
+
+Source:
+Anywhere-IPv4
+
+IMPORTANT:
+For a real deployment, do not expose SSH to the whole internet unless
+necessary. Use My IP or another restricted source.
+
+------------------------------------------------------------
+E6. LAUNCH INSTANCE
+------------------------------------------------------------
+
+Click:
+
+Launch instance
+
+Go to:
+
+EC2 → Instances
+
+Select:
+
+Metro-server
+
+Wait for:
+
+Instance state:
+Running
+
+Status checks:
+3/3 checks passed
+
+------------------------------------------------------------
+E7. CONNECT TO EC2
+------------------------------------------------------------
+
+Select the instance.
+
+Click:
+
+Connect
+
+Choose:
+
+EC2 Instance Connect
+
+Click:
+
+Connect
+
+You should receive a shell similar to:
+
+[ec2-user@ip-172-31-xx-xxx ~]$
+
+------------------------------------------------------------
+E8. CHECK JAVA
+------------------------------------------------------------
+
+java -version
+
+If Java 17 is required and not installed, install/configure
+Java 17 using the package available in your Academy environment.
+
+Then:
+
+java -version
+
+------------------------------------------------------------
+E9. INSTALL MAVEN
+------------------------------------------------------------
+
+Check:
+
+mvn -version
+
+If missing:
+
+sudo dnf install maven -y
+
+Then:
+
+mvn -version
+
+------------------------------------------------------------
+E10. INSTALL GIT
+------------------------------------------------------------
+
+Check:
+
+git --version
+
+If missing:
+
+sudo dnf install git -y
+
+Then:
+
+git --version
+
+------------------------------------------------------------
+E11. CLONE METRO RESERVATION
+------------------------------------------------------------
+
+cd ~
+
+git clone https://github.com/deepthisagar7/metro-reservation.git
+
+Check:
+
+ls
+
+Enter:
+
+cd metro-reservation
+
+Check:
+
+ls
+
+Look for:
+
+pom.xml
+src
+
+------------------------------------------------------------
+E12. BUILD WAR
+------------------------------------------------------------
+
+mvn clean package
+
+Expected:
+
+BUILD SUCCESS
+
+Check:
+
+ls target
+
+Look for:
+
+metro-reservation.war
+
+Verify:
+
+ls -lh target/*.war
+
+------------------------------------------------------------
+E13. DEPLOY WAR TO TOMCAT
+------------------------------------------------------------
+
+The paper requires a web application accessible through EC2.
+Use Tomcat to run the WAR if the project is a Tomcat web application.
+
+If Tomcat is already installed, identify its directory.
+
+Example:
+
+ls /opt/tomcat
+
+If Tomcat is installed at:
+
+/opt/tomcat
+
+Copy the WAR:
+
+sudo cp target/metro-reservation.war /opt/tomcat/webapps/
+
+Start Tomcat:
+
+sudo /opt/tomcat/bin/startup.sh
+
+Check:
+
+ps -ef | grep tomcat
+
+Check listening ports:
+
+ss -tulpn | grep 8080
+
+------------------------------------------------------------
+E14. CHECK TOMCAT LOGS
+------------------------------------------------------------
+
+sudo tail -f /opt/tomcat/logs/catalina.out
+
+Look for deployment/startup messages.
+
+Press:
+
+Ctrl + C
+
+to stop following the log.
+
+------------------------------------------------------------
+E15. CHECK LOCAL APPLICATION
+------------------------------------------------------------
+
+From the EC2 machine:
+
+curl http://localhost:8080/
+
+If the WAR uses a context path:
+
+curl http://localhost:8080/metro-reservation/
+
+The exact URL depends on the WAR/context path.
+
+------------------------------------------------------------
+E16. FIND PUBLIC IP
+------------------------------------------------------------
+
+In EC2 Console select:
+
+Metro-server
+
+Find:
+
+Public IPv4 address
+
+Use that address for browser access.
+
+Example format:
+
+http://PUBLIC-IP:8080/metro-reservation/
+
+------------------------------------------------------------
+E17. TEST FROM BROWSER
+------------------------------------------------------------
+
+Open:
+
+http://<PUBLIC-IP>:8080/metro-reservation/
+
+Replace:
+
+<PUBLIC-IP>
+
+with the EC2 Public IPv4 address.
+
+If the application is deployed as ROOT:
+
+http://<PUBLIC-IP>:8080/
+
+If the browser cannot connect, check:
+
+1. EC2 is Running.
+2. Status checks are 3/3.
+3. Tomcat is running.
+4. Tomcat listens on port 8080.
+5. Security Group allows TCP 8080.
+6. Public IPv4 address is correct.
+7. Application deployment succeeded.
+8. Network ACL/routing is not blocking traffic.
+
+------------------------------------------------------------
+E18. CHECK SECURITY GROUP AGAIN
+------------------------------------------------------------
+
+EC2:
+
+Instances
+→ select Metro-server
+→ Security
+→ Security groups
+→ Inbound rules
+
+Confirm:
+
+SSH:
+22 → My IP
+
+HTTP:
+80 → Anywhere-IPv4
+
+Tomcat:
+8080 → Anywhere-IPv4
+
+Only add 8080 if the application is directly accessed through
+Tomcat on port 8080.
+
+------------------------------------------------------------
+E19. OPTIONAL HTTP PORT 80
+------------------------------------------------------------
+
+If you want users to access the application without typing :8080,
+the application must be served through port 80 or through a reverse
+proxy/load balancer.
+
+Do not simply add port 80 and expect Tomcat on 8080 to automatically
+become available on port 80.
+
+For the basic practical, using:
+
+http://PUBLIC-IP:8080/metro-reservation/
+
+is sufficient when Tomcat is configured on 8080.
+
+------------------------------------------------------------
+E20. STOP TOMCAT DEMONSTRATION
+------------------------------------------------------------
+
+If Tomcat was started using startup.sh:
+
+sudo /opt/tomcat/bin/shutdown.sh
+
+The EC2 instance itself can remain:
+
+Running
+
+while the application becomes unavailable.
+
+This demonstrates:
+
+EC2 running
+≠
+Tomcat/application running
+
+------------------------------------------------------------
+E21. START TOMCAT AGAIN
+------------------------------------------------------------
+
+sudo /opt/tomcat/bin/startup.sh
+
+Check:
+
+ps -ef | grep tomcat
+
+Check:
+
+ss -tulpn | grep 8080
+
+Then test browser again.
+
+------------------------------------------------------------
+E22. AWS SCENARIO QUESTIONS
+------------------------------------------------------------
+
+1. Why can't passengers access the application using EC2 public IP?
+
+Possible reasons:
+- EC2 instance is not running.
+- Security Group does not allow the application port.
+- Tomcat is stopped.
+- Application was not deployed correctly.
+- Wrong public IP is being used.
+- Application is listening on a different port.
+- Network/routing configuration is incorrect.
+
+2. Why configure HTTP/application ports in Security Group?
+
+Answer:
+The Security Group acts as a network access filter. If the application
+port is not allowed inbound, internet users cannot reach the service
+even if the application is running.
+
+3. What happens if Tomcat stops while EC2 is running?
+
+Answer:
+The EC2 server remains running, but the web application becomes
+unavailable because the Tomcat service is not accepting requests.
+
+4. How make the application available if EC2 fails?
+
+Answer:
+Use multiple EC2 instances with load balancing and health checks.
+An Application Load Balancer can route users to healthy instances.
+Auto Scaling can maintain the required number of instances.
+
+5. Advantages of AWS over a local server?
+
+Answer:
+AWS provides remote internet access, flexible compute resources,
+monitoring, easier scaling and cloud infrastructure services without
+requiring the application server to be physically hosted locally.
+
+============================================================
+FINAL SET 2 CHECKLIST
+============================================================
+
+A) DOCKER
+[ ] Pull Tomcat image
+[ ] Pull MySQL image
+[ ] Clone Metro Reservation repository
+[ ] Build metro-reservation.war
+[ ] Create Docker network
+[ ] Create persistent MySQL volume
+[ ] Run MySQL container
+[ ] Create application Dockerfile
+[ ] Build application Docker image
+[ ] Run application container
+[ ] Connect application and MySQL containers
+[ ] Verify network
+[ ] Configure database connection
+[ ] Access application through browser
+[ ] Stop MySQL
+[ ] Recover MySQL
+[ ] Delete MySQL container
+[ ] Recreate MySQL using same volume
+[ ] Verify database persistence
+
+B) JENKINS
+[ ] Start Jenkins
+[ ] Create Freestyle Project
+[ ] Configure Metro Reservation GitHub repository
+[ ] Configure branch
+[ ] Configure JDK
+[ ] Configure Maven
+[ ] Add Maven build step
+[ ] Use clean test package
+[ ] Generate WAR
+[ ] Archive target/*.war
+[ ] Run Build Now
+[ ] Verify BUILD SUCCESS
+[ ] Verify metro-reservation.war
+[ ] Understand failed build
+[ ] Know troubleshooting steps
+
+C) NAGIOS
+[ ] Pull Nagios image
+[ ] Run Nagios
+[ ] Login to dashboard
+[ ] Check plugins
+[ ] Connect Nagios to application Docker network
+[ ] Configure/check HTTP service
+[ ] Check disk
+[ ] Check load/CPU where plugin is available
+[ ] Configure/understand WARNING
+[ ] Configure/understand CRITICAL
+[ ] Stop application
+[ ] Demonstrate failure
+[ ] Start application
+[ ] Demonstrate recovery
+[ ] Show dashboard
+
+D) KUBERNETES
+[ ] Start Minikube
+[ ] Check kubectl
+[ ] Build application Docker image
+[ ] Load image into Minikube if needed
+[ ] Create Deployment YAML
+[ ] Deploy application
+[ ] Verify Pods
+[ ] Create NodePort Service
+[ ] Open application
+[ ] Scale replicas
+[ ] Verify scaling
+[ ] Delete one Pod
+[ ] Demonstrate automatic Pod recreation
+[ ] Verify desired replicas
+
+E) AWS EC2
+[ ] Start AWS Academy Lab
+[ ] Open AWS Console
+[ ] Open EC2
+[ ] Launch Metro-server
+[ ] Select Amazon Linux
+[ ] Select allowed instance type
+[ ] Configure key pair
+[ ] Configure Security Group
+[ ] Allow SSH 22 from My IP
+[ ] Allow HTTP 80
+[ ] Allow Tomcat 8080 if required
+[ ] Launch instance
+[ ] Wait for Running + 3/3 checks
+[ ] Connect using EC2 Instance Connect
+[ ] Check Java
+[ ] Install/check Maven
+[ ] Install/check Git
+[ ] Clone Metro Reservation repository
+[ ] Build WAR
+[ ] Install/configure Tomcat
+[ ] Deploy WAR
+[ ] Start Tomcat
+[ ] Check port 8080
+[ ] Find Public IPv4
+[ ] Open application using public IP
+[ ] Demonstrate Tomcat/application failure
+[ ] Restart Tomcat
+[ ] Verify application recovery
+
+============================================================
+IMPORTANT DIFFERENCE FOR THIS SET
+============================================================
+
+This SET-2 is the Metro Reservation paper.
+
+Repository:
+
+https://github.com/deepthisagar7/metro-reservation.git
+
+Expected web artifact:
+
+metro-reservation.war
+
+Expected Jenkins task:
+
+Jenkins Freestyle Project + Maven
+
+Expected monitoring task:
+
+Nagios
+
+Expected container scaling task:
+
+Kubernetes
+
+Expected cloud task:
+
+AWS EC2
+
+============================================================
+END OF SET 2
+============================================================

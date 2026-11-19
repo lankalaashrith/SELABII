@@ -1,0 +1,1789 @@
+SOFTWARE ENGINEERING LAB INTERNAL II
+SET 3 — AI-OLMS
+COMPLETE PRACTICAL STEPS, COMMANDS, CONFIGURATION AND SCENARIO ANSWERS
+
+Repository given in SET 3:
+https://github.com/deepthisagar7/AI-OLMS.git
+
+Important:
+This set is for the AI Online Learning Management System (AI-OLMS).
+The paper has 5 tasks, each for 20 marks:
+1. Docker – Multi-Container Application
+2. Jenkins – Freestyle Project
+3. System Monitoring using Nagios
+4. Container Scaling using Kubernetes
+5. AWS Deployment using EC2
+
+============================================================
+SET 1(a) — DOCKER MULTI-CONTAINER APPLICATION
+============================================================
+
+GOAL
+
+Deploy the AI-OLMS Java web application and MySQL database using separate Docker containers.
+
+The paper requires:
+- Tomcat image
+- MySQL image
+- Maven WAR build
+- Application container
+- Database container
+- Communication between containers
+- Browser access
+
+------------------------------------------------------------
+STEP 1 — CHECK DOCKER
+------------------------------------------------------------
+
+docker --version
+docker ps
+
+If Docker is running, continue.
+
+------------------------------------------------------------
+STEP 2 — CLONE THE AI-OLMS PROJECT
+------------------------------------------------------------
+
+git clone https://github.com/deepthisagar7/AI-OLMS.git
+
+Enter the project:
+
+cd AI-OLMS
+
+Check files:
+
+ls
+
+Look for:
+
+pom.xml
+src
+
+------------------------------------------------------------
+STEP 3 — CHECK JAVA AND MAVEN
+------------------------------------------------------------
+
+java -version
+
+mvn -version
+
+The Maven project should use the Java version required by its pom.xml.
+
+Check the pom:
+
+grep -n "packaging" pom.xml
+grep -n "maven.compiler" pom.xml
+
+For a Java web application, the packaging should normally be WAR.
+
+------------------------------------------------------------
+STEP 4 — BUILD THE AI-OLMS WAR FILE
+------------------------------------------------------------
+
+Inside the AI-OLMS project:
+
+mvn clean package
+
+Expected:
+
+BUILD SUCCESS
+
+Check generated files:
+
+ls target
+
+Look for a .war file.
+
+For example:
+
+ai-olms.war
+
+IMPORTANT:
+Use the actual WAR filename shown by:
+
+ls target/*.war
+
+If the filename is different, use that actual filename in the later Docker commands.
+
+------------------------------------------------------------
+STEP 5 — CHECK THE WAR FILE
+------------------------------------------------------------
+
+ls -lh target/*.war
+
+This confirms that Maven generated the WAR file.
+
+------------------------------------------------------------
+STEP 6 — PULL TOMCAT IMAGE
+------------------------------------------------------------
+
+docker pull tomcat:latest
+
+Check:
+
+docker images
+
+------------------------------------------------------------
+STEP 7 — PULL MYSQL IMAGE
+------------------------------------------------------------
+
+docker pull mysql:5.7
+
+Check:
+
+docker images
+
+------------------------------------------------------------
+STEP 8 — CREATE A DOCKER NETWORK
+------------------------------------------------------------
+
+docker network create ai-olms-network
+
+Verify:
+
+docker network ls
+
+You should see:
+
+ai-olms-network
+
+Why?
+Both containers will use this network so the application can communicate with MySQL using the MySQL container name.
+
+------------------------------------------------------------
+STEP 9 — CREATE PERSISTENT MYSQL VOLUME
+------------------------------------------------------------
+
+docker volume create ai-olms-mysql-data
+
+Verify:
+
+docker volume ls
+
+Important:
+
+ai-olms-mysql-data
+
+This keeps database files even if the MySQL container is deleted.
+
+------------------------------------------------------------
+STEP 10 — RUN MYSQL CONTAINER
+------------------------------------------------------------
+
+docker run -d --name ai-olms-mysql --network ai-olms-network -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=aiolms -e MYSQL_USER=aiuser -e MYSQL_PASSWORD=aipass -v ai-olms-mysql-data:/var/lib/mysql mysql:5.7
+
+Check:
+
+docker ps
+
+MySQL should be running.
+
+------------------------------------------------------------
+STEP 11 — CREATE DOCKERFILE
+------------------------------------------------------------
+
+Inside the AI-OLMS project, create:
+
+Dockerfile
+
+Put:
+
+FROM tomcat:latest
+
+COPY target/*.war /usr/local/tomcat/webapps/ai-olms.war
+
+EXPOSE 8080
+
+This creates the AI-OLMS application image using Tomcat.
+
+------------------------------------------------------------
+STEP 12 — BUILD THE AI-OLMS DOCKER IMAGE
+------------------------------------------------------------
+
+docker build -t ai-olms-app:1.0 .
+
+Check:
+
+docker images
+
+You should see:
+
+ai-olms-app
+
+------------------------------------------------------------
+STEP 13 — RUN AI-OLMS APPLICATION CONTAINER
+------------------------------------------------------------
+
+Run:
+
+docker run -d --name ai-olms-app --network ai-olms-network -p 8080:8080 ai-olms-app:1.0
+
+Check:
+
+docker ps
+
+You should see:
+
+ai-olms-app
+ai-olms-mysql
+
+------------------------------------------------------------
+STEP 14 — CHECK CONTAINER NETWORK
+------------------------------------------------------------
+
+docker network inspect ai-olms-network
+
+Confirm both containers are attached:
+
+ai-olms-app
+ai-olms-mysql
+
+------------------------------------------------------------
+STEP 15 — CHECK APPLICATION LOGS
+------------------------------------------------------------
+
+docker logs ai-olms-app
+
+If Tomcat starts successfully, you should see Tomcat startup messages.
+
+Also check MySQL:
+
+docker logs ai-olms-mysql
+
+------------------------------------------------------------
+STEP 16 — ACCESS AI-OLMS THROUGH BROWSER
+------------------------------------------------------------
+
+Open:
+
+http://localhost:8080/ai-olms/
+
+If the WAR/application uses a different context path, use the context path shown by the Tomcat deployment logs.
+
+------------------------------------------------------------
+STEP 17 — CHECK MYSQL CONNECTIVITY
+------------------------------------------------------------
+
+The application container must use the MySQL container name as the database host.
+
+Database host:
+
+ai-olms-mysql
+
+Database port:
+
+3306
+
+Database name:
+
+aiolms
+
+Username:
+
+aiuser
+
+Password:
+
+aipass
+
+Do NOT use localhost for MySQL from inside the AI-OLMS container.
+
+Why?
+
+Inside the application container, localhost means the application container itself.
+
+The MySQL server is in another container.
+
+------------------------------------------------------------
+STEP 18 — DEMONSTRATE MYSQL FAILURE
+------------------------------------------------------------
+
+Stop MySQL:
+
+docker stop ai-olms-mysql
+
+Check:
+
+docker ps
+
+The AI-OLMS container may still be running, but database-dependent operations will fail because MySQL is unavailable.
+
+Start MySQL again:
+
+docker start ai-olms-mysql
+
+Check:
+
+docker ps
+
+------------------------------------------------------------
+STEP 19 — DEMONSTRATE DATABASE PERSISTENCE
+------------------------------------------------------------
+
+Delete only the MySQL container:
+
+docker rm -f ai-olms-mysql
+
+Check:
+
+docker volume ls
+
+The volume must still exist:
+
+ai-olms-mysql-data
+
+Do NOT run:
+
+docker volume rm ai-olms-mysql-data
+
+because that deletes the persistent database storage.
+
+------------------------------------------------------------
+STEP 20 — RECREATE MYSQL USING THE SAME VOLUME
+------------------------------------------------------------
+
+docker run -d --name ai-olms-mysql --network ai-olms-network -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=aiolms -e MYSQL_USER=aiuser -e MYSQL_PASSWORD=aipass -v ai-olms-mysql-data:/var/lib/mysql mysql:5.7
+
+Check:
+
+docker ps
+
+The same database volume is reused.
+
+------------------------------------------------------------
+STEP 21 — FINAL DOCKER CHECK
+------------------------------------------------------------
+
+docker ps
+
+docker images
+
+docker network inspect ai-olms-network
+
+docker volume ls
+
+docker logs ai-olms-app
+
+Open:
+
+http://localhost:8080/ai-olms/
+
+------------------------------------------------------------
+DOCKER COMMANDS TO REMEMBER
+------------------------------------------------------------
+
+docker --version
+docker ps
+docker pull
+docker images
+docker network create
+docker network ls
+docker volume create
+docker volume ls
+docker run
+docker logs
+docker network inspect
+docker stop
+docker start
+docker rm -f
+docker build
+
+------------------------------------------------------------
+DOCKER SCENARIO ANSWERS
+------------------------------------------------------------
+
+1. What happens if MySQL stops while students are accessing AI-OLMS?
+
+The AI-OLMS container can remain running, but database-dependent operations such as login, course access or enrolment may fail because the database server is unavailable.
+
+2. How can student/course information be preserved after deleting MySQL?
+
+Use a persistent Docker volume and mount it to:
+
+/var/lib/mysql
+
+For example:
+
+ai-olms-mysql-data:/var/lib/mysql
+
+3. Why separate application and database containers?
+
+Separation makes the system easier to manage, update, restart and scale. Application and database services are isolated from each other.
+
+4. How can student login credentials and course information be protected?
+
+Use authentication, strong database passwords, restricted database access, network isolation, HTTPS/TLS, proper permissions and avoid exposing MySQL directly to the Internet.
+
+5. How troubleshoot database connection failure?
+
+Check:
+docker ps
+
+Check network:
+docker network inspect ai-olms-network
+
+Check MySQL logs:
+docker logs ai-olms-mysql
+
+Check application logs:
+docker logs ai-olms-app
+
+Confirm:
+- MySQL is running
+- Both containers use the same Docker network
+- Database hostname is ai-olms-mysql
+- Port is 3306
+- Database name/user/password are correct
+
+
+============================================================
+SET 2(b) — JENKINS FREESTYLE PROJECT
+============================================================
+
+GOAL
+
+Automatically build the AI-OLMS Java web application from GitHub using Jenkins and Maven and generate the WAR file.
+
+The paper requires:
+- GitHub repository
+- JDK
+- Maven
+- Successful Maven build
+- WAR generation
+- Jenkins build status and console output
+
+------------------------------------------------------------
+STEP 1 — START JENKINS
+------------------------------------------------------------
+
+Open:
+
+http://localhost:8080
+
+Login to Jenkins.
+
+------------------------------------------------------------
+STEP 2 — CREATE FREESTYLE PROJECT
+------------------------------------------------------------
+
+Select:
+
+New Item
+
+Enter:
+
+AI-OLMS-CI
+
+Select:
+
+Freestyle project
+
+Click:
+
+OK
+
+------------------------------------------------------------
+STEP 3 — CONFIGURE GITHUB
+------------------------------------------------------------
+
+Open:
+
+AI-OLMS-CI
+→ Configure
+
+Under:
+
+Source Code Management
+
+Select:
+
+Git
+
+Repository URL:
+
+https://github.com/deepthisagar7/AI-OLMS.git
+
+Branch:
+
+*/main
+
+Save/continue.
+
+------------------------------------------------------------
+STEP 4 — CONFIGURE BUILD TRIGGER
+------------------------------------------------------------
+
+Go to:
+
+Build Triggers
+
+For automatic GitHub checking, select:
+
+Poll SCM
+
+Example schedule:
+
+H/5 * * * *
+
+This checks approximately every 5 minutes.
+
+------------------------------------------------------------
+STEP 5 — CONFIGURE JDK
+------------------------------------------------------------
+
+Go to:
+
+Manage Jenkins
+→ Tools
+
+Configure the JDK required by the AI-OLMS project.
+
+Check the project's Java requirement:
+
+grep -n "maven.compiler" pom.xml
+
+If the project requires Java 17, configure JDK 17.
+
+Example Windows JDK path:
+
+C:\Program Files\Java\jdk-17
+
+------------------------------------------------------------
+STEP 6 — CONFIGURE MAVEN
+------------------------------------------------------------
+
+Go to:
+
+Manage Jenkins
+→ Tools
+
+Configure Maven.
+
+Example:
+
+Name:
+
+Maven-3.9.16
+
+Example installation path:
+
+C:\apache-maven-3.9.16\apache-maven-3.9.16
+
+The exact path depends on your computer.
+
+------------------------------------------------------------
+STEP 7 — ADD MAVEN BUILD STEP
+------------------------------------------------------------
+
+Open:
+
+AI-OLMS-CI
+→ Configure
+
+Go to:
+
+Build Steps
+
+Select:
+
+Invoke top-level Maven targets
+
+Select the Maven installation configured earlier.
+
+Goals:
+
+clean test package
+
+Meaning:
+
+clean
+= removes previous build output
+
+test
+= runs project tests
+
+package
+= builds the WAR/JAR according to pom.xml
+
+------------------------------------------------------------
+STEP 8 — ARCHIVE WAR FILE
+------------------------------------------------------------
+
+Go to:
+
+Post-build Actions
+
+Select:
+
+Archive the artifacts
+
+Use:
+
+target/*.war
+
+This stores the generated WAR file with the successful Jenkins build.
+
+------------------------------------------------------------
+STEP 9 — SAVE
+------------------------------------------------------------
+
+Click:
+
+Save
+
+------------------------------------------------------------
+STEP 10 — BUILD NOW
+------------------------------------------------------------
+
+Click:
+
+Build Now
+
+Open the build number.
+
+Then:
+
+Console Output
+
+Look for:
+
+BUILD SUCCESS
+
+Also look for Maven WAR creation information.
+
+------------------------------------------------------------
+STEP 11 — VERIFY WAR
+------------------------------------------------------------
+
+Open the successful build.
+
+Check:
+
+Artifacts
+
+The generated .war file should be listed.
+
+------------------------------------------------------------
+STEP 12 — TROUBLESHOOT BUILD FAILURE
+------------------------------------------------------------
+
+If Jenkins reports a compilation error:
+
+Open:
+
+Console Output
+
+Read the first meaningful error.
+
+Common checks:
+
+java -version
+mvn -version
+
+Verify:
+- Correct JDK
+- Correct Maven
+- Correct Git repository
+- Correct branch
+- Correct pom.xml
+- Required dependencies available
+
+------------------------------------------------------------
+JENKINS SCENARIO ANSWERS
+------------------------------------------------------------
+
+1. What happens if a developer introduces compilation errors?
+
+Jenkins runs the Maven build. Maven reports the compilation error and Jenkins marks the build as failed.
+
+2. How can Jenkins automatically detect GitHub changes?
+
+Use a build trigger such as Poll SCM. Jenkins periodically checks the configured repository for changes.
+
+3. Difference between generating WAR and deploying to Tomcat?
+
+Generating the WAR only creates the deployable web application package. Deployment means placing that WAR into a Tomcat server and running the application.
+
+4. Why is Maven useful?
+
+Maven manages dependencies, compiles source code, runs tests and packages the application.
+
+5. How identify and resolve a failed Jenkins build?
+
+Open Console Output, locate the Maven error, correct the code/configuration/dependency problem, then run Build Now again.
+
+
+============================================================
+SET 3(c) — SYSTEM MONITORING USING NAGIOS
+============================================================
+
+GOAL
+
+Set up Nagios to monitor the AI-OLMS application server and services.
+
+The paper requires:
+- Pull/run Nagios
+- Configure monitoring
+- CPU
+- Memory
+- Service uptime
+- HTTP monitoring
+- Nagios dashboard
+- Alerts
+
+------------------------------------------------------------
+STEP 1 — PULL NAGIOS IMAGE
+------------------------------------------------------------
+
+docker pull jasonrivers/nagios:latest
+
+Check:
+
+docker images
+
+------------------------------------------------------------
+STEP 2 — RUN NAGIOS
+------------------------------------------------------------
+
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+Check:
+
+docker ps
+
+------------------------------------------------------------
+STEP 3 — OPEN NAGIOS
+------------------------------------------------------------
+
+Open:
+
+http://localhost:8082
+
+Use the Nagios login configured by the image.
+
+If the standard image credentials are not accepted, check the container logs:
+
+docker logs nagios
+
+------------------------------------------------------------
+STEP 4 — CONNECT NAGIOS TO AI-OLMS DOCKER NETWORK
+------------------------------------------------------------
+
+If AI-OLMS is running in:
+
+ai-olms-network
+
+connect Nagios:
+
+docker network connect ai-olms-network nagios
+
+Check:
+
+docker network inspect ai-olms-network
+
+Nagios should now be able to communicate with services on that Docker network.
+
+------------------------------------------------------------
+STEP 5 — CHECK HTTP PLUGIN
+------------------------------------------------------------
+
+docker exec nagios ls /opt/nagios/libexec/check_http
+
+If it exists, test HTTP.
+
+------------------------------------------------------------
+STEP 6 — CHECK AI-OLMS HTTP SERVICE
+------------------------------------------------------------
+
+If AI-OLMS is available from the container network:
+
+docker exec nagios /opt/nagios/libexec/check_http -H ai-olms-app -p 8080
+
+A successful HTTP response indicates that the application service is reachable.
+
+------------------------------------------------------------
+STEP 7 — CHECK DISK
+------------------------------------------------------------
+
+Check the plugin:
+
+docker exec nagios ls /opt/nagios/libexec/check_disk
+
+If available:
+
+docker exec nagios /opt/nagios/libexec/check_disk -w 20% -c 10%
+
+Meaning:
+
+More than 20% free
+→ OK
+
+20% or less free
+→ WARNING
+
+10% or less free
+→ CRITICAL
+
+------------------------------------------------------------
+STEP 8 — CHECK LOAD / CPU-RELATED PLUGIN
+------------------------------------------------------------
+
+docker exec nagios ls /opt/nagios/libexec/check_load
+
+If available:
+
+docker exec nagios /opt/nagios/libexec/check_load
+
+The exact plugin and thresholds depend on the Nagios image/configuration.
+
+------------------------------------------------------------
+STEP 9 — CHECK MEMORY MONITORING
+------------------------------------------------------------
+
+List available plugins:
+
+docker exec nagios ls /opt/nagios/libexec/
+
+Look for memory-related plugins.
+
+If a suitable memory plugin is available, use it according to its help/output.
+
+------------------------------------------------------------
+STEP 10 — HTTP FAILURE DEMONSTRATION
+------------------------------------------------------------
+
+Stop AI-OLMS:
+
+docker stop ai-olms-app
+
+Test again:
+
+docker exec nagios /opt/nagios/libexec/check_http -H ai-olms-app -p 8080
+
+The check should fail because the application is stopped.
+
+------------------------------------------------------------
+STEP 11 — RECOVER AI-OLMS
+------------------------------------------------------------
+
+docker start ai-olms-app
+
+Check again:
+
+docker exec nagios /opt/nagios/libexec/check_http -H ai-olms-app -p 8080
+
+The service should return to a successful HTTP state once Tomcat/application startup is complete.
+
+------------------------------------------------------------
+STEP 12 — OPEN NAGIOS DASHBOARD
+------------------------------------------------------------
+
+Open:
+
+http://localhost:8082
+
+Show:
+- Host status
+- Service status
+- OK
+- WARNING
+- CRITICAL
+
+Demonstration flow:
+
+AI-OLMS working
+→ Nagios detects OK
+
+AI-OLMS stopped
+→ Nagios detects failure
+
+AI-OLMS restarted
+→ Nagios returns to OK
+
+------------------------------------------------------------
+NAGIOS SCENARIO ANSWERS
+------------------------------------------------------------
+
+1. How can Nagios identify whether the AI-OLMS server is running/down?
+
+Nagios performs host/service checks at configured intervals. If checks succeed, the service is OK. If checks fail repeatedly, Nagios reports a problem.
+
+2. Difference between WARNING and CRITICAL?
+
+WARNING means a monitored value has crossed a warning threshold but the service may still be operating.
+
+CRITICAL means the service/resource has reached a serious failure threshold or is unavailable.
+
+3. What if CPU reaches 100%?
+
+The server may become slow or unresponsive. Nagios can report a WARNING/CRITICAL state based on configured thresholds.
+
+4. How detect application failure while server is running?
+
+Use an HTTP/service check. The server may be alive, but if Tomcat/AI-OLMS is unavailable, the HTTP check fails.
+
+5. How identify Tomcat vs MySQL vs server failure?
+
+Use separate checks:
+- Host/server check
+- HTTP/Tomcat check
+- MySQL/database check
+
+Compare the results to isolate the failed component.
+
+
+============================================================
+SET 4(d) — CONTAINER SCALING USING KUBERNETES
+============================================================
+
+GOAL
+
+Scale the AI-OLMS application using Kubernetes.
+
+The paper requires:
+- Create Docker image
+- Create Kubernetes Deployment
+- Check pods
+- Increase replicas
+- Verify scaling
+- Delete pod and demonstrate automatic recreation
+
+------------------------------------------------------------
+STEP 1 — VERIFY DOCKER IMAGE
+------------------------------------------------------------
+
+docker images
+
+Confirm:
+
+ai-olms-app
+
+If not built yet:
+
+docker build -t ai-olms-app:1.0 .
+
+------------------------------------------------------------
+IMPORTANT NOTE ABOUT KUBERNETES IMAGE ACCESS
+------------------------------------------------------------
+
+If using Minikube with the local Docker environment, make the image available to Minikube.
+
+One common method:
+
+minikube image load ai-olms-app:1.0
+
+Verify:
+
+minikube image ls | grep ai-olms-app
+
+------------------------------------------------------------
+STEP 2 — START MINIKUBE
+------------------------------------------------------------
+
+minikube start
+
+Check:
+
+minikube status
+
+------------------------------------------------------------
+STEP 3 — CHECK KUBERNETES NODE
+------------------------------------------------------------
+
+kubectl get nodes
+
+You should see the Minikube node.
+
+------------------------------------------------------------
+STEP 4 — CREATE DEPLOYMENT YAML
+------------------------------------------------------------
+
+Create:
+
+ai-olms-deployment.yaml
+
+Use:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-olms-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-olms
+  template:
+    metadata:
+      labels:
+        app: ai-olms
+    spec:
+      containers:
+      - name: ai-olms-container
+        image: ai-olms-app:1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+
+------------------------------------------------------------
+STEP 5 — APPLY DEPLOYMENT
+------------------------------------------------------------
+
+kubectl apply -f ai-olms-deployment.yaml
+
+Check:
+
+kubectl get deployments
+
+------------------------------------------------------------
+STEP 6 — CHECK PODS
+------------------------------------------------------------
+
+kubectl get pods
+
+You should eventually see:
+
+2 pods
+
+Check with more detail:
+
+kubectl get pods -o wide
+
+------------------------------------------------------------
+STEP 7 — CREATE KUBERNETES SERVICE
+------------------------------------------------------------
+
+kubectl expose deployment ai-olms-app --type=NodePort --port=8080
+
+Check:
+
+kubectl get services
+
+------------------------------------------------------------
+STEP 8 — OPEN APPLICATION
+------------------------------------------------------------
+
+minikube service ai-olms-app
+
+This opens the service using the Minikube-accessible address.
+
+------------------------------------------------------------
+STEP 9 — SCALE UP
+------------------------------------------------------------
+
+Increase replicas:
+
+kubectl scale deployment ai-olms-app --replicas=5
+
+Check:
+
+kubectl get deployment ai-olms-app
+
+Check pods:
+
+kubectl get pods
+
+You should now have:
+
+5 pods
+
+------------------------------------------------------------
+STEP 10 — SCALE DOWN
+------------------------------------------------------------
+
+If you want to demonstrate scale down:
+
+kubectl scale deployment ai-olms-app --replicas=2
+
+Check:
+
+kubectl get pods
+
+The number should return to 2.
+
+------------------------------------------------------------
+STEP 11 — DEMONSTRATE AUTOMATIC POD RECREATION
+------------------------------------------------------------
+
+Check pods:
+
+kubectl get pods
+
+Copy one pod name.
+
+Example:
+
+ai-olms-app-xxxxxxxxxx-xxxxx
+
+Delete it:
+
+kubectl delete pod <pod-name>
+
+Immediately check:
+
+kubectl get pods
+
+Kubernetes creates a replacement because the Deployment requires the desired number of replicas.
+
+------------------------------------------------------------
+STEP 12 — FINAL KUBERNETES VERIFICATION
+------------------------------------------------------------
+
+kubectl get deployments
+
+kubectl get pods
+
+kubectl get services
+
+kubectl get nodes
+
+------------------------------------------------------------
+KUBERNETES SCENARIO ANSWERS
+------------------------------------------------------------
+
+1. What happens if one AI-OLMS pod crashes?
+
+Kubernetes detects that the actual number of running pods is below the desired number and creates a replacement pod.
+
+2. How does Kubernetes maintain desired replicas?
+
+The Deployment continuously compares the desired state with the current state and creates/removes pods as needed.
+
+3. Difference between scaling up and scaling down?
+
+Scaling up increases the number of application replicas.
+
+Scaling down decreases the number of replicas.
+
+4. How do more replicas improve performance?
+
+Requests can be handled by multiple application instances instead of relying on a single instance, reducing the load on each instance during peak periods.
+
+5. How does a Kubernetes Service distribute requests?
+
+A Service provides a stable access point and routes traffic to available pods selected by its labels.
+
+
+============================================================
+SET 5(e) — AWS DEPLOYMENT USING EC2
+============================================================
+
+GOAL
+
+Deploy the AI-OLMS Java web application on AWS EC2 and access it through the EC2 public IP address.
+
+The paper requires:
+- Launch/configure EC2
+- Access AI-OLMS through EC2 public IP
+
+------------------------------------------------------------
+STEP 1 — START AWS ACADEMY LAB
+------------------------------------------------------------
+
+Open AWS Academy Learner Lab.
+
+Click:
+
+Start Lab
+
+Wait until the lab is active.
+
+Click:
+
+AWS
+
+to open the AWS Management Console.
+
+------------------------------------------------------------
+STEP 2 — OPEN EC2
+------------------------------------------------------------
+
+In AWS Console search:
+
+EC2
+
+Open:
+
+EC2
+
+Then:
+
+Instances
+
+------------------------------------------------------------
+STEP 3 — LAUNCH INSTANCE
+------------------------------------------------------------
+
+Click:
+
+Launch instances
+
+Name:
+
+AI-OLMS-server
+
+Choose an Amazon Linux image allowed by the lab.
+
+For example:
+
+Amazon Linux 2023
+
+Choose an instance type allowed by the Academy lab.
+
+Example:
+
+t3.micro
+
+------------------------------------------------------------
+STEP 4 — KEY PAIR
+------------------------------------------------------------
+
+Choose a permitted key pair.
+
+The key pair is required for SSH-based access when using SSH.
+
+If using EC2 Instance Connect and the Academy environment supports it, follow the lab's allowed connection method.
+
+------------------------------------------------------------
+STEP 5 — CONFIGURE SECURITY GROUP
+------------------------------------------------------------
+
+Create/select the security group.
+
+Inbound rules should allow the required application access.
+
+SSH:
+
+Type:
+SSH
+
+Protocol:
+TCP
+
+Port:
+22
+
+Source:
+My IP
+
+HTTP:
+
+Type:
+HTTP
+
+Protocol:
+TCP
+
+Port:
+80
+
+Source:
+Anywhere-IPv4
+
+If Tomcat is directly exposed on port 8080:
+
+Type:
+Custom TCP
+
+Port:
+8080
+
+Source:
+Anywhere-IPv4
+
+Important ports:
+
+22
+= SSH
+
+80
+= HTTP
+
+8080
+= Tomcat/application server
+
+------------------------------------------------------------
+STEP 6 — LAUNCH
+------------------------------------------------------------
+
+Click:
+
+Launch instance
+
+------------------------------------------------------------
+STEP 7 — WAIT FOR HEALTH CHECKS
+------------------------------------------------------------
+
+Open:
+
+EC2 → Instances
+
+Select:
+
+AI-OLMS-server
+
+Wait for:
+
+Instance state:
+Running
+
+Status checks:
+3/3 checks passed
+
+------------------------------------------------------------
+STEP 8 — CONNECT TO EC2
+------------------------------------------------------------
+
+Select the instance.
+
+Click:
+
+Connect
+
+Use the connection method available in the lab, such as:
+
+EC2 Instance Connect
+
+Then:
+
+Connect
+
+You should get a shell similar to:
+
+[ec2-user@ip-xxx-xxx-xxx-xxx ~]$
+
+------------------------------------------------------------
+STEP 9 — CHECK JAVA
+------------------------------------------------------------
+
+java -version
+
+The AI-OLMS project must use the Java version required by its pom.xml.
+
+Check the project requirement later using:
+
+grep -n "maven.compiler" pom.xml
+
+------------------------------------------------------------
+STEP 10 — INSTALL MAVEN IF REQUIRED
+------------------------------------------------------------
+
+Check:
+
+mvn -version
+
+If Maven is missing, on Amazon Linux use the package available in your lab.
+
+For example:
+
+sudo dnf install maven -y
+
+Then:
+
+mvn -version
+
+------------------------------------------------------------
+STEP 11 — INSTALL GIT IF REQUIRED
+------------------------------------------------------------
+
+Check:
+
+git --version
+
+If missing:
+
+sudo dnf install git -y
+
+Then:
+
+git --version
+
+------------------------------------------------------------
+STEP 12 — CLONE AI-OLMS
+------------------------------------------------------------
+
+cd ~
+
+git clone https://github.com/deepthisagar7/AI-OLMS.git
+
+Check:
+
+ls
+
+Enter:
+
+cd AI-OLMS
+
+Check:
+
+ls
+
+You should see the Maven project files such as:
+
+pom.xml
+src
+
+------------------------------------------------------------
+STEP 13 — CHECK POM
+------------------------------------------------------------
+
+grep -n "packaging" pom.xml
+
+grep -n "maven.compiler" pom.xml
+
+Check whether the project uses WAR packaging and the required Java version.
+
+------------------------------------------------------------
+STEP 14 — BUILD AI-OLMS
+------------------------------------------------------------
+
+Inside AI-OLMS:
+
+mvn clean package
+
+Expected:
+
+BUILD SUCCESS
+
+Check:
+
+ls target
+
+Look for:
+
+*.war
+
+------------------------------------------------------------
+STEP 15 — CHECK WAR
+------------------------------------------------------------
+
+ls -lh target/*.war
+
+This confirms the application WAR was generated.
+
+------------------------------------------------------------
+STEP 16 — INSTALL/CONFIGURE TOMCAT
+------------------------------------------------------------
+
+The exact Tomcat version should match the web application's compatibility requirements.
+
+If Tomcat is already provided/installed in the lab, use that installation.
+
+Check whether Tomcat exists:
+
+ls /opt
+
+Look for a Tomcat directory.
+
+------------------------------------------------------------
+STEP 17 — DEPLOY WAR TO TOMCAT
+------------------------------------------------------------
+
+If Tomcat is installed under:
+
+/opt/tomcat
+
+Copy the generated WAR:
+
+sudo cp target/*.war /opt/tomcat/webapps/ai-olms.war
+
+If the project generates a different WAR filename, use that filename.
+
+------------------------------------------------------------
+STEP 18 — START TOMCAT
+------------------------------------------------------------
+
+If Tomcat uses the standard startup script:
+
+sudo /opt/tomcat/bin/startup.sh
+
+Check processes:
+
+ps -ef | grep tomcat
+
+------------------------------------------------------------
+STEP 19 — CHECK TOMCAT LOGS
+------------------------------------------------------------
+
+sudo tail -f /opt/tomcat/logs/catalina.out
+
+Look for successful Tomcat startup/deployment messages.
+
+Press:
+
+Ctrl + C
+
+to stop viewing the log.
+
+------------------------------------------------------------
+STEP 20 — CHECK SECURITY GROUP
+------------------------------------------------------------
+
+For direct Tomcat access, ensure the security group allows:
+
+Custom TCP
+Port:
+8080
+
+Source:
+Anywhere-IPv4
+
+For a production environment, restrict access appropriately rather than opening ports unnecessarily.
+
+------------------------------------------------------------
+STEP 21 — GET EC2 PUBLIC IP
+------------------------------------------------------------
+
+From the EC2 Console, copy:
+
+Public IPv4 address
+
+Or from the instance shell, if network access permits:
+
+curl http://checkip.amazonaws.com
+
+------------------------------------------------------------
+STEP 22 — ACCESS AI-OLMS
+------------------------------------------------------------
+
+If Tomcat is using port 8080:
+
+http://<EC2-PUBLIC-IP>:8080/ai-olms/
+
+Example format:
+
+http://52.x.x.x:8080/ai-olms/
+
+Use the actual public IP of your instance.
+
+------------------------------------------------------------
+STEP 23 — VERIFY APPLICATION
+------------------------------------------------------------
+
+The AI-OLMS application should load through the browser.
+
+If it does not load, check in this order:
+
+1. EC2 instance is Running
+2. Status checks are passed
+3. Tomcat is running
+4. WAR is present in webapps
+5. Port 8080 is allowed in Security Group
+6. Application logs
+7. Database connection, if the application requires MySQL
+8. Correct URL/context path
+
+------------------------------------------------------------
+STEP 24 — CHECK TOMCAT
+------------------------------------------------------------
+
+ps -ef | grep tomcat
+
+If using the standard Tomcat script:
+
+sudo /opt/tomcat/bin/shutdown.sh
+
+Then:
+
+sudo /opt/tomcat/bin/startup.sh
+
+------------------------------------------------------------
+STEP 25 — CLOUDWATCH
+------------------------------------------------------------
+
+Open:
+
+AWS Console
+→ CloudWatch
+
+Use EC2 metrics to observe the instance.
+
+Useful metrics include:
+
+CPUUtilization
+NetworkIn
+NetworkOut
+
+------------------------------------------------------------
+STEP 26 — DEMONSTRATE TOMCAT FAILURE
+------------------------------------------------------------
+
+Stop Tomcat:
+
+sudo /opt/tomcat/bin/shutdown.sh
+
+The EC2 instance may still show:
+
+Running
+
+But the AI-OLMS web application becomes unavailable.
+
+This demonstrates:
+
+EC2 running
+≠
+Tomcat/application running
+
+------------------------------------------------------------
+STEP 27 — RESTART TOMCAT
+------------------------------------------------------------
+
+sudo /opt/tomcat/bin/startup.sh
+
+Wait for deployment.
+
+Check:
+
+ps -ef | grep tomcat
+
+Then test:
+
+http://<EC2-PUBLIC-IP>:8080/ai-olms/
+
+------------------------------------------------------------
+AWS SCENARIO ANSWERS
+------------------------------------------------------------
+
+1. Why might students be unable to access AI-OLMS through the EC2 public IP?
+
+Possible causes:
+- EC2 instance is stopped
+- Status checks failed
+- Tomcat is stopped
+- Application failed to deploy
+- Wrong public IP
+- Security Group does not allow the required port
+- Wrong application URL/context path
+- Application/database connection failure
+
+2. Why configure HTTP and Tomcat ports in the security group?
+
+The security group acts as a network access control layer. It must allow incoming traffic to the port on which the web application is listening.
+
+For direct Tomcat access, port 8080 must be allowed.
+
+3. What happens if Tomcat stops while EC2 is running?
+
+The EC2 virtual machine remains running, but the AI-OLMS web application becomes unavailable because the application server is stopped.
+
+4. How make AI-OLMS available if EC2 fails?
+
+Use multiple EC2 instances and a load balancer such as an Application Load Balancer. This avoids depending on one EC2 instance.
+
+5. Advantages of AWS over a local server?
+
+AWS provides remote access, scalable infrastructure, monitoring, flexible resource options and easier deployment of services without depending on one physical local machine.
+
+
+============================================================
+FINAL SET 3 EXAM CHECKLIST
+============================================================
+
+SET 3(a) — DOCKER
+
+[ ] Clone AI-OLMS GitHub repository
+[ ] Check pom.xml
+[ ] Build WAR with Maven
+[ ] Pull Tomcat image
+[ ] Pull MySQL image
+[ ] Create Docker network
+[ ] Create persistent MySQL volume
+[ ] Run MySQL container
+[ ] Create Dockerfile
+[ ] Build AI-OLMS Docker image
+[ ] Run application container
+[ ] Connect application and database containers
+[ ] Check logs
+[ ] Open AI-OLMS in browser
+[ ] Demonstrate MySQL failure
+[ ] Recover MySQL
+[ ] Delete MySQL container
+[ ] Recreate MySQL using same volume
+[ ] Verify persistence
+
+SET 3(b) — JENKINS
+
+[ ] Open Jenkins
+[ ] Create Freestyle project
+[ ] Configure GitHub repository
+[ ] Configure main branch
+[ ] Configure JDK
+[ ] Configure Maven
+[ ] Add clean test package
+[ ] Archive target/*.war
+[ ] Build Now
+[ ] Open Console Output
+[ ] Show BUILD SUCCESS
+[ ] Verify generated WAR
+
+SET 3(c) — NAGIOS
+
+[ ] Pull Nagios image
+[ ] Run Nagios
+[ ] Open Nagios dashboard
+[ ] Connect Nagios to AI-OLMS Docker network
+[ ] Check HTTP plugin
+[ ] Monitor AI-OLMS HTTP service
+[ ] Check disk
+[ ] Check load/CPU plugin
+[ ] Check memory-related plugin
+[ ] Stop AI-OLMS
+[ ] Show Nagios failure
+[ ] Start AI-OLMS
+[ ] Show recovery
+[ ] Explain WARNING
+[ ] Explain CRITICAL
+
+SET 3(d) — KUBERNETES
+
+[ ] Build AI-OLMS Docker image
+[ ] Load image into Minikube if needed
+[ ] Start Minikube
+[ ] Check node
+[ ] Create Deployment YAML
+[ ] Apply Deployment
+[ ] Check pods
+[ ] Create Service
+[ ] Open service
+[ ] Scale replicas
+[ ] Verify increased replicas
+[ ] Delete one pod
+[ ] Show automatic pod recreation
+[ ] Explain scaling up/down
+[ ] Explain Service request distribution
+
+SET 3(e) — AWS EC2
+
+[ ] Start AWS Academy Lab
+[ ] Open AWS Console
+[ ] Open EC2
+[ ] Launch AI-OLMS-server
+[ ] Choose allowed Amazon Linux image
+[ ] Choose allowed instance type
+[ ] Configure key pair
+[ ] Configure Security Group
+[ ] Allow SSH 22
+[ ] Allow HTTP 80 if needed
+[ ] Allow Tomcat 8080
+[ ] Launch instance
+[ ] Wait for Running
+[ ] Wait for 3/3 checks
+[ ] Connect to EC2
+[ ] Check Java
+[ ] Check/install Maven
+[ ] Check/install Git
+[ ] Clone AI-OLMS
+[ ] Build WAR
+[ ] Configure Tomcat
+[ ] Copy WAR to webapps
+[ ] Start Tomcat
+[ ] Check logs
+[ ] Get public IP
+[ ] Open AI-OLMS through public IP
+[ ] Check CloudWatch
+[ ] Demonstrate Tomcat failure
+[ ] Restart Tomcat
+[ ] Explain EC2 availability
+[ ] Explain multiple EC2 + load balancer
+
+END OF SET 3

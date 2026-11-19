@@ -1,0 +1,1189 @@
+Software Engineering Lab Internal II — Complete Practical Steps
+
+Below is the full text-format procedure for all 5 sets, based on your sample paper. I’m keeping the commands and steps in the same task order, including the AWS EC2 deployment you just completed.
+
+SET 1 — DOCKER MULTI-CONTAINER APPLICATION
+
+Goal: Deploy WordPress frontend + MySQL backend using Docker, custom network, persistent storage, port mapping, recovery, and browser access.
+
+Step 1 — Check Docker
+
+docker --version
+docker ps
+
+If Docker is running, continue.
+
+Step 2 — Pull MySQL image
+
+docker pull mysql:5.7
+
+Check:
+
+docker images
+
+Step 3 — Pull WordPress image
+
+docker pull wordpress:latest
+
+Check:
+
+docker images
+
+Step 4 — Create custom Docker network
+
+docker network create library-network
+
+Verify:
+
+docker network ls
+
+You should see:
+
+library-network
+
+Step 5 — Create persistent MySQL volume
+
+docker volume create mysql-data
+
+Verify:
+
+docker volume ls
+
+The important point is:
+
+mysql-data
+
+The database files will remain in this volume even if the MySQL container is deleted.
+
+Step 6 — Run MySQL container
+
+docker run -d --name mysql --network library-network -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=wordpress -e MYSQL_USER=wpuser -e MYSQL_PASSWORD=wppass -v mysql-data:/var/lib/mysql mysql:5.7
+
+Check:
+
+docker ps
+
+Step 7 — Run WordPress container
+
+Use port 8081 if 8080 is already occupied.
+
+docker run -d --name wordpress --network library-network -p 8081:80 -e WORDPRESS_DB_HOST=mysql:3306 -e WORDPRESS_DB_USER=wpuser -e WORDPRESS_DB_PASSWORD=wppass -e WORDPRESS_DB_NAME=wordpress wordpress:latest
+
+Check:
+
+docker ps
+
+Both should be running:
+
+mysql
+wordpress
+
+Step 8 — Check database connectivity
+
+Because both containers are on:
+
+library-network
+
+WordPress can communicate with MySQL using:
+
+mysql:3306
+
+Check the network:
+
+docker network inspect library-network
+
+You should see both containers.
+
+Step 9 — Open WordPress
+
+Open browser:
+
+http://localhost:8081
+
+Complete the WordPress setup if required.
+
+Step 10 — Demonstrate MySQL container failure
+
+Stop MySQL:
+
+docker stop mysql
+
+Check:
+
+docker ps
+
+WordPress may remain running, but database operations will fail because its database server is unavailable.
+
+Step 11 — Recover MySQL
+
+Start it again:
+
+docker start mysql
+
+Check:
+
+docker ps
+
+Step 12 — Demonstrate container deletion and database persistence
+
+First stop/remove MySQL:
+
+docker rm -f mysql
+
+Do NOT delete mysql-data.
+
+Check:
+
+docker volume ls
+
+The volume should still exist.
+
+Step 13 — Recreate MySQL using the same volume
+
+docker run -d --name mysql --network library-network -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=wordpress -e MYSQL_USER=wpuser -e MYSQL_PASSWORD=wppass -v mysql-data:/var/lib/mysql mysql:5.7
+
+Check:
+
+docker ps
+
+The database data is preserved because:
+
+mysql-data → /var/lib/mysql
+
+Step 14 — Final Docker verification
+
+docker ps
+docker network inspect library-network
+docker volume ls
+
+Then open:
+
+http://localhost:8081
+
+Docker commands to remember
+
+docker pull
+docker images
+docker network create
+docker volume create
+docker run
+docker ps
+docker stop
+docker start
+docker rm -f
+docker network inspect
+docker volume ls
+
+
+SET 2 — JENKINS + JAVA + MAVEN CI
+
+Goal: Configure Jenkins Freestyle CI with GitHub + Maven, compile/test/package the Java project, and archive the generated JAR/WAR.
+
+Step 1 — Start Jenkins
+
+Open:
+
+http://localhost:8080
+
+Login to Jenkins.
+
+Step 2 — Create Freestyle project
+
+Choose:
+
+New Item
+
+Enter:
+
+Library-Management-CI
+
+Select:
+
+Freestyle project
+
+Click:
+
+OK
+
+Step 3 — Configure GitHub repository
+
+In:
+
+Source Code Management
+
+Select:
+
+Git
+
+Repository URL:
+
+https://github.com/deepthisagar7/library-management
+
+Branch:
+
+*/main
+
+Step 4 — Configure polling
+
+Go to:
+
+Build Triggers
+
+Select:
+
+Poll SCM
+
+Use:
+
+H/5 * * * *
+
+This checks the repository approximately every 5 minutes.
+
+Step 5 — Configure Maven
+
+Go to:
+
+Manage Jenkins
+→ Tools
+
+Configure Maven.
+
+Example:
+
+Maven name:
+Maven-3.9.16
+
+Path:
+
+C:\apache-maven-3.9.16\apache-maven-3.9.16
+
+Step 6 — Configure JDK
+
+The project requires Java 17.
+
+Use:
+
+C:\Program Files\Java\jdk-17
+
+The important point is that Jenkins must use JDK 17, not Java 11.
+
+Step 7 — Add Maven build step
+
+Open your project:
+
+Configure
+
+Go to:
+
+Build Steps
+→ Invoke top-level Maven targets
+
+Select your configured Maven installation.
+
+Goals:
+
+clean test package
+
+Meaning:
+
+clean    → removes previous build
+test     → runs tests
+package  → creates JAR/WAR
+
+Step 8 — Archive artifact
+
+Go to:
+
+Post-build Actions
+→ Archive the artifacts
+
+For the current Java project:
+
+target/*.jar
+
+Click:
+
+Save
+
+Step 9 — Run Jenkins build
+
+Click:
+
+Build Now
+
+Open:
+
+Console Output
+
+Successful result should contain:
+
+BUILD SUCCESS
+
+And something similar to:
+
+Building jar:
+.../target/library-management-1.0-SNAPSHOT.jar
+
+Step 10 — Verify archived artifact
+
+Open the successful Jenkins build.
+
+The JAR should appear under:
+
+Artifacts
+
+Step 11 — Understand failed build demonstration
+
+The sample asks for both:
+
+Successful build
+Failed build
+
+For a failed build demonstration, a compilation/test failure should cause Jenkins to show:
+
+BUILD FAILURE
+
+You do not need to permanently break the project.
+
+Jenkins commands/concepts to remember
+
+GitHub repository
+↓
+Jenkins
+↓
+Maven
+↓
+clean
+↓
+test
+↓
+package
+↓
+JAR/WAR
+↓
+Archive
+
+
+SET 3 — KUBERNETES DEPLOYMENT + SCALING
+
+Goal: Start Minikube, deploy 2 replicas, expose them, scale to 5, demonstrate recovery, rolling update, and rollback.
+
+Step 1 — Start Minikube
+
+minikube start
+
+Check:
+
+minikube status
+
+Step 2 — Check Kubernetes
+
+kubectl get nodes
+
+You should see the Minikube node.
+
+Step 3 — Create deployment YAML
+
+Create:
+
+library-deployment.yaml
+
+Put:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: library-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: library-app
+  template:
+    metadata:
+      labels:
+        app: library-app
+    spec:
+      containers:
+      - name: library-container
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+
+Step 4 — Apply deployment
+
+kubectl apply -f library-deployment.yaml
+
+Check:
+
+kubectl get deployments
+
+Step 5 — Check pods
+
+kubectl get pods
+
+You should eventually have:
+
+2 pods
+
+Step 6 — Expose application
+
+kubectl expose deployment library-app --type=NodePort --port=80
+
+Check:
+
+kubectl get services
+
+Step 7 — Open application
+
+minikube service library-app
+
+This opens the application in the browser.
+
+Step 8 — Scale from 2 to 5
+
+kubectl scale deployment library-app --replicas=5
+
+Check:
+
+kubectl get pods
+
+Now you should have:
+
+5 pods
+
+Step 9 — Demonstrate automatic pod recovery
+
+First:
+
+kubectl get pods
+
+Copy one pod name.
+
+For example:
+
+library-app-xxxxx
+
+Delete it:
+
+kubectl delete pod library-app-xxxxx
+
+Immediately check:
+
+kubectl get pods
+
+Kubernetes automatically creates another pod because the Deployment wants:
+
+5 replicas
+
+Step 10 — Perform rolling update
+
+Change the image from:
+
+nginx:latest
+
+to:
+
+nginx:1.27
+
+You can directly run:
+
+kubectl set image deployment/library-app library-container=nginx:1.27
+
+Check:
+
+kubectl rollout status deployment/library-app
+
+Step 11 — Check rollout history
+
+kubectl rollout history deployment/library-app
+
+Step 12 — Rollback
+
+If the update is considered failed:
+
+kubectl rollout undo deployment/library-app
+
+Check:
+
+kubectl rollout status deployment/library-app
+
+Then:
+
+kubectl get pods
+
+Kubernetes commands to remember
+
+minikube start
+minikube status
+kubectl get nodes
+kubectl apply -f library-deployment.yaml
+kubectl get deployments
+kubectl get pods
+kubectl expose deployment library-app --type=NodePort --port=80
+kubectl get services
+minikube service library-app
+kubectl scale deployment library-app --replicas=5
+kubectl delete pod <pod-name>
+kubectl set image deployment/library-app library-container=nginx:1.27
+kubectl rollout status deployment/library-app
+kubectl rollout history deployment/library-app
+kubectl rollout undo deployment/library-app
+
+
+SET 4 — NAGIOS MONITORING
+
+Goal: Run Nagios, configure monitoring, check CPU/memory/disk/uptime, HTTP/database services, thresholds, and demonstrate failure/recovery.
+
+Step 1 — Pull Nagios image
+
+docker pull jasonrivers/nagios:latest
+
+Step 2 — Run Nagios
+
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+Check:
+
+docker ps
+
+Step 3 — Open Nagios
+
+Open:
+
+http://localhost:8082
+
+Login:
+
+Username: nagiosadmin
+Password: nagiosadmin
+
+If password doesn’t work:
+
+docker exec -it nagios htpasswd -b /opt/nagios/etc/htpasswd.users nagiosadmin nagiosadmin
+
+Then:
+
+docker restart nagios
+
+Step 4 — Check Nagios plugin
+
+Check HTTP plugin:
+
+docker exec nagios ls /opt/nagios/libexec/check_http
+
+Step 5 — Connect Nagios to Docker network
+
+Connect:
+
+docker network connect library-network nagios
+
+Now Nagios can reach containers on:
+
+library-network
+
+Step 6 — Check WordPress HTTP service
+
+docker exec nagios /opt/nagios/libexec/check_http -H wordpress -p 80
+
+Expected:
+
+HTTP OK
+
+Step 7 — Demonstrate application failure
+
+Stop WordPress:
+
+docker stop wordpress
+
+Run:
+
+docker exec nagios /opt/nagios/libexec/check_http -H wordpress -p 80
+
+It should report a failure/CRITICAL condition.
+
+Step 8 — Recover application
+
+docker start wordpress
+
+Check again:
+
+docker exec nagios /opt/nagios/libexec/check_http -H wordpress -p 80
+
+It should return to:
+
+HTTP OK
+
+Step 9 — Disk monitoring
+
+Check available plugin:
+
+docker exec nagios /opt/nagios/libexec/check_disk -w 20% -c 10%
+
+Meaning:
+
+>20% free → OK
+≤20% free → WARNING
+≤10% free → CRITICAL
+
+Step 10 — Load/CPU-related monitoring
+
+Check whether the plugin exists:
+
+docker exec nagios ls /opt/nagios/libexec/check_load
+
+If available:
+
+docker exec nagios /opt/nagios/libexec/check_load
+
+Step 11 — Memory monitoring
+
+Check available plugins:
+
+docker exec nagios ls /opt/nagios/libexec/
+
+Look for memory-related checking plugins.
+
+Step 12 — Database monitoring
+
+The provided Nagios image did not have a check_mysql plugin available in the earlier setup.
+
+Check:
+
+docker exec nagios ls /opt/nagios/libexec/check_mysql
+
+If it does not exist, don’t waste time trying to execute it.
+
+For the practical, demonstrate the HTTP application check and explain that database monitoring requires a MySQL-compatible Nagios plugin/check command.
+
+Step 13 — Nagios dashboard
+
+Open:
+
+http://localhost:8082
+
+Show:
+
+Hosts
+Services
+OK
+WARNING
+CRITICAL
+
+The important demonstration is:
+
+Service working
+↓
+Service stopped
+↓
+Nagios detects failure
+↓
+Service restarted
+↓
+Nagios returns to OK
+
+
+SET 5 — AWS EC2 CLOUD DEPLOYMENT
+
+Goal: Deploy the Library Management application on an EC2 instance and make it remotely accessible. The sample specifically asks for EC2 deployment and asks questions around browser access, SSH security, Tomcat failure, availability, and ALB/multiple EC2 instances.
+
+STEP 1 — Start AWS Academy Lab
+
+Open your AWS Academy Learner Lab.
+
+Click:
+
+Start Lab
+
+Wait until the lab becomes active.
+
+Then click:
+
+AWS
+
+to open the AWS Management Console.
+
+EC2 CREATION
+
+STEP 2 — Open EC2
+
+In AWS Console:
+
+Search → EC2
+
+Open:
+
+EC2
+
+Then:
+
+Instances
+
+STEP 3 — Launch instance
+
+Click:
+
+Launch instances
+
+Set:
+
+Name:
+Library-server
+
+Choose an Amazon Linux image.
+
+Example:
+
+Amazon Linux 2023
+
+Instance type:
+
+t3.micro
+
+or the type permitted by your Academy lab.
+
+STEP 4 — Create/select key pair
+
+Under Key pair:
+
+Choose an existing permitted key pair or create one if the lab allows it.
+
+The key pair is used for SSH access.
+
+SECURITY GROUP
+
+STEP 5 — Configure security group
+
+Create/select the security group.
+
+Add inbound rules:
+
+SSH
+
+Type: SSH
+Protocol: TCP
+Port: 22
+Source: My IP
+
+For a temporary lab demonstration, SSH from a permitted source may be required.
+
+HTTP
+
+Type: HTTP
+Protocol: TCP
+Port: 80
+Source: Anywhere-IPv4
+
+This allows browser access.
+
+If using Tomcat directly on port 8080, add:
+
+Type: Custom TCP
+Port: 8080
+Source: Anywhere-IPv4
+
+So the important ports are:
+
+22   → SSH
+80   → HTTP
+8080 → Tomcat
+
+STEP 6 — Launch
+
+Click:
+
+Launch instance
+
+STEP 7 — Wait for status checks
+
+Go to:
+
+EC2 → Instances
+
+Select:
+
+Library-server
+
+Wait until:
+
+Instance state: Running
+
+and:
+
+Status checks: 3/3 checks passed
+
+CONNECT TO EC2
+
+STEP 8 — Connect
+
+Select the instance.
+
+Click:
+
+Connect
+
+Choose:
+
+EC2 Instance Connect
+
+Then:
+
+Connect
+
+You should get:
+
+[ec2-user@ip-172-31-17-210 ~]$
+
+INSTALL JAVA
+
+STEP 9 — Check Java
+
+java -version
+
+The Java application requires Java 17.
+
+If Java 17 is not installed, install/configure Java 17 according to the available Amazon Linux package in your lab.
+
+Then verify:
+
+java -version
+
+INSTALL MAVEN
+
+STEP 10 — Check Maven
+
+mvn -version
+
+If Maven isn’t installed, install it.
+
+For example:
+
+sudo dnf install maven -y
+
+Then:
+
+mvn -version
+
+INSTALL GIT
+
+STEP 11 — Install Git
+
+sudo dnf install git -y
+
+Verify:
+
+git --version
+
+DOWNLOAD LIBRARY PROJECT
+
+STEP 12 — Clone GitHub repository
+
+cd ~
+git clone https://github.com/deepthisagar7/library-management.git
+
+Check:
+
+ls
+
+Enter the project:
+
+cd library-management
+
+Check:
+
+ls
+
+You should see:
+
+pom.xml
+src
+target
+
+BUILD JAVA APPLICATION
+
+STEP 13 — Build using Maven
+
+Inside the project:
+
+mvn clean package
+
+Expected:
+
+BUILD SUCCESS
+
+JAR should be created under:
+
+target/
+
+Check:
+
+ls target
+
+You should see:
+
+library-management-1.0-SNAPSHOT.jar
+
+VERIFY JAVA APPLICATION
+
+STEP 14 — Check main method
+
+grep -R "public static void main" src
+
+Expected:
+
+src/main/java/com/library/LibraryManagement.java:
+public static void main(String[] args)
+
+STEP 15 — Run application
+
+java -jar target/library-management-1.0-SNAPSHOT.jar
+
+Expected:
+
+Library Management System
+1. Search Book
+2. Issue Book
+3. Return Book
+4. Reserve Book
+
+Stop it with:
+
+Ctrl + C
+
+TOMCAT SETUP
+
+The project is currently a JAR console application, not a WAR web application. Therefore, don’t force the JAR into Tomcat. For your actual current project, the command above demonstrates the application running successfully.
+
+If the exam specifically requires browser access through Tomcat, the project needs to be a web application packaged as a WAR. Your sample paper itself only says to deploy the Library Management application on EC2; it does not explicitly require Tomcat.
+
+BROWSER ACCESS FOR THE CURRENT JAR
+
+A console JAR cannot be opened directly in a browser.
+
+If the application has an HTTP server/web module, then start that server on its configured port.
+
+For example, if the application listens on:
+
+8080
+
+add the security-group rule:
+
+Custom TCP
+Port: 8080
+Source: Anywhere-IPv4
+
+Then open:
+
+http://<PUBLIC-IP>:8080
+
+Get the public IP using:
+
+curl http://checkip.amazonaws.com
+
+or copy the:
+
+Public IPv4 address
+
+from EC2.
+
+AWS MONITORING
+
+STEP 16 — Check EC2 health
+
+In:
+
+EC2 → Instances
+
+Verify:
+
+Instance state → Running
+Status checks → 3/3 checks passed
+
+STEP 17 — CloudWatch
+
+Search:
+
+CloudWatch
+
+Open:
+
+CloudWatch → Metrics
+
+Select:
+
+EC2
+
+You can monitor metrics such as:
+
+CPUUtilization
+NetworkIn
+NetworkOut
+Disk-related metrics where available
+
+AWS FAILURE DEMONSTRATION
+
+Step 18 — Stop Tomcat/application
+
+If Tomcat is running:
+
+sudo systemctl stop tomcat
+
+or, if running manually:
+
+Ctrl + C
+
+The EC2 instance can still show:
+
+Running
+
+while the application itself is unavailable.
+
+This demonstrates the difference between:
+
+EC2 server running
+
+and:
+
+Application running
+
+AWS SECURITY
+
+Step 19 — Restrict SSH
+
+Go to:
+
+EC2
+→ Security Groups
+→ launch-wizard-1
+→ Inbound rules
+→ Edit inbound rules
+
+SSH should be:
+
+Type: SSH
+Port: 22
+Source: My IP
+
+Avoid:
+
+0.0.0.0/0
+
+for SSH unless the lab specifically requires it temporarily.
+
+AWS AVAILABILITY
+
+Step 20 — Explain improved availability
+
+For better availability:
+
+Multiple EC2 instances
+        ↓
+Application Load Balancer
+        ↓
+Users
+
+Instead of:
+
+Users
+  ↓
+One EC2
+  ↓
+Single point of failure
+
+The ALB can distribute traffic between multiple EC2 instances.
+
+
+FINAL EXAM CHECKLIST
+
+SET 1 — Docker
+
+✓ Pull MySQL
+✓ Pull WordPress
+✓ Create custom network
+✓ Create volume
+✓ Run MySQL
+✓ Run WordPress
+✓ Configure DB connection
+✓ Configure port mapping
+✓ Open WordPress
+✓ Stop/recover MySQL
+✓ Delete/recreate MySQL
+✓ Verify persistent data
+
+SET 2 — Jenkins
+
+✓ Start Jenkins
+✓ Create Freestyle project
+✓ Configure GitHub
+✓ Configure branch
+✓ Configure JDK
+✓ Configure Maven
+✓ Configure Poll SCM
+✓ Maven: clean test package
+✓ Build
+✓ Archive JAR
+✓ Show BUILD SUCCESS
+✓ Understand BUILD FAILURE
+
+SET 3 — Kubernetes
+
+✓ Start Minikube
+✓ Create Deployment YAML
+✓ 2 replicas
+✓ Apply YAML
+✓ Create Service
+✓ Open application
+✓ Scale 2 → 5
+✓ Delete pod
+✓ Show automatic recreation
+✓ Rolling update
+✓ Check rollout
+✓ Rollback
+
+SET 4 — Nagios
+
+✓ Pull Nagios image
+✓ Run Nagios
+✓ Login
+✓ Connect to Docker network
+✓ HTTP check
+✓ Disk check
+✓ Load/CPU check where plugin available
+✓ Configure/understand WARNING
+✓ Configure/understand CRITICAL
+✓ Stop WordPress
+✓ Show failure
+✓ Start WordPress
+✓ Show recovery
+✓ Dashboard
+
+SET 5 — AWS
+
+✓ Start AWS Academy Lab
+✓ Open AWS Console
+✓ Open EC2
+✓ Launch Library-server
+✓ Amazon Linux
+✓ t3.micro
+✓ Configure security group
+✓ SSH 22
+✓ HTTP 80
+✓ 8080 if required
+✓ Launch
+✓ Wait for 3/3 checks
+✓ EC2 Instance Connect
+✓ Install/check Java 17
+✓ Install Maven
+✓ Install Git
+✓ Clone GitHub
+✓ cd project
+✓ mvn clean package
+✓ Verify JAR
+✓ Run JAR
+✓ Stop with Ctrl+C
+✓ CloudWatch monitoring
+✓ Restrict SSH
+✓ Explain Tomcat/application failure
+✓ Explain ALB + multiple EC2 availability
+
+These five sets together cover the 100 marks / 20 marks each structure in the provided Lab Internal II paper.

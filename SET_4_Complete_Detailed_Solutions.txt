@@ -1,0 +1,1696 @@
+SOFTWARE ENGINEERING LAB INTERNAL II
+SET 4 — COMPLETE DETAILED STEP-BY-STEP SOLUTIONS
+Hospital Management System — Jenkins, Email Notifications, Minikube, Nagios, AWS
+
+SOURCE:
+Keshav Memorial Institute of Technology
+A.Y. 2026-2027
+Lab Internal II
+Subject: Software Engineering
+Subject Code: 23CC505PC
+Set 4 uploaded question paper
+
+GitHub repository given in the question paper:
+https://github.com/Kumbhambhargavi75/HospitalManagementSystem
+
+============================================================
+SET 4 — QUESTION 1
+JENKINS SCRIPTED PIPELINE
+25 MARKS
+============================================================
+
+Q1(a)
+Automate the build process of the Hospital Management System hosted on GitHub.
+Write a Jenkins Scripted Pipeline.
+
+STEP 1 — Start Jenkins
+
+Open Jenkins:
+
+http://localhost:8080
+
+Login to Jenkins.
+
+STEP 2 — Create a Pipeline project
+
+Jenkins Dashboard
+→ New Item
+→ Enter: Hospital-Management-Pipeline
+→ Select: Pipeline
+→ OK
+
+STEP 3 — Open Pipeline configuration
+
+Go to:
+
+Pipeline
+→ Definition
+→ Pipeline script
+
+STEP 4 — Enter the basic Scripted Pipeline
+
+Use:
+
+node {
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+}
+
+IMPORTANT FOR WINDOWS JENKINS:
+
+If Jenkins is running on Windows and sh does not work, use:
+
+node {
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        bat 'mvn clean package'
+    }
+}
+
+STEP 5 — Save
+
+Click Save.
+
+STEP 6 — Run
+
+Click Build Now.
+
+Open:
+
+Build Number
+→ Console Output
+
+Look for:
+
+BUILD SUCCESS
+
+The pipeline performs:
+
+GitHub → Checkout → Maven clean package → Build result
+
+
+------------------------------------------------------------
+Q1(b)
+During the Hospital Management System pipeline, the Maven build may fail
+because of compilation errors. How do you solve this?
+
+STEP 1 — Run the Jenkins build
+
+Open:
+
+Jenkins
+→ Hospital-Management-Pipeline
+→ Build Now
+→ Console Output
+
+Find the compilation error.
+
+Common examples:
+
+cannot find symbol
+package ... does not exist
+incompatible types
+invalid target release
+
+STEP 2 — Check Java version
+
+java -version
+mvn -version
+
+Make sure Maven uses the Java version required by the project.
+
+STEP 3 — Clean old Maven output
+
+mvn clean
+
+STEP 4 — Build again
+
+mvn clean package
+
+STEP 5 — Fix the actual source/dependency error
+
+If a class or method is missing:
+→ correct the class name/method call.
+
+If an import is missing:
+→ add the required import.
+
+If a dependency is missing:
+→ correct/add the dependency in pom.xml.
+
+If the Java version is wrong:
+→ configure Jenkins to use the required JDK.
+
+STEP 6 — Check pom.xml
+
+Check:
+- groupId
+- artifactId
+- version
+- dependencies
+- compiler configuration
+
+STEP 7 — Test locally
+
+mvn clean test
+mvn clean package
+
+STEP 8 — Commit and push the fix
+
+git add .
+git commit -m "Fix Maven compilation errors"
+git push
+
+STEP 9 — Run Jenkins again
+
+Build Now
+→ Console Output
+
+Expected:
+
+BUILD SUCCESS
+
+EXAM ANSWER:
+Read the Maven console output, identify the first real compilation error,
+check Java/Maven versions and dependencies, correct the source code or
+pom.xml, test with Maven, push the fix to GitHub, and rerun Jenkins.
+
+
+------------------------------------------------------------
+Q1(c)
+Organize the Hospital Management System CI process into separate stages.
+
+Use:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Compile') {
+        sh 'mvn clean compile'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    stage('Package') {
+        sh 'mvn package'
+    }
+}
+
+For Windows Jenkins, use bat:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Compile') {
+        bat 'mvn clean compile'
+    }
+
+    stage('Test') {
+        bat 'mvn test'
+    }
+
+    stage('Package') {
+        bat 'mvn package'
+    }
+}
+
+Execution:
+
+Checkout
+→ Compile
+→ Test
+→ Package
+→ BUILD SUCCESS
+
+
+------------------------------------------------------------
+Q1(d)
+Ensure that the management application works correctly before deployment.
+
+Use:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        sh 'mvn clean compile'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    stage('Package') {
+        sh 'mvn package'
+    }
+
+    stage('Deploy') {
+        echo 'Application is ready for deployment'
+    }
+}
+
+For Windows, replace sh with bat.
+
+Logic:
+
+Checkout
+→ Build
+→ Test
+→ Package
+→ Deploy
+
+If Test fails:
+
+Checkout
+→ Build
+→ Test FAIL
+→ Pipeline fails
+→ Normal deployment does not continue
+
+STEP:
+1. Save pipeline.
+2. Build Now.
+3. Open Console Output.
+4. Verify Test stage.
+5. Verify BUILD SUCCESS when tests pass.
+
+
+------------------------------------------------------------
+Q1(e)
+Automatically build and test whenever a developer triggers the pipeline.
+
+A developer can trigger the Jenkins pipeline with Build Now or a configured
+remote/webhook trigger.
+
+Basic pipeline:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+}
+
+For Windows:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        bat 'mvn clean package'
+    }
+
+    stage('Test') {
+        bat 'mvn test'
+    }
+}
+
+For manual developer trigger:
+
+Jenkins
+→ Pipeline
+→ Build Now
+
+For automatic remote triggering:
+
+Pipeline
+→ Configure
+→ Build Triggers
+→ Enable the appropriate remote/webhook trigger.
+
+The result is:
+
+Developer trigger
+→ Jenkins starts
+→ Checkout
+→ Build
+→ Test
+→ Result
+
+
+============================================================
+SET 4 — QUESTION 2
+JENKINS EMAIL NOTIFICATION CONFIGURATION
+25 MARKS
+============================================================
+
+Q2(a)
+Configure Jenkins Email Notifications using the Email Extension Plugin
+and send an automatic failure notification.
+
+STEP 1 — Install Email Extension Plugin
+
+Jenkins Dashboard
+→ Manage Jenkins
+→ Plugins
+→ Available plugins
+
+Search:
+
+Email Extension Plugin
+
+Install it.
+
+Restart Jenkins if required.
+
+STEP 2 — Configure SMTP
+
+Go to:
+
+Manage Jenkins
+→ System
+
+Find:
+
+Extended E-mail Notification
+
+Example Gmail SMTP configuration:
+
+SMTP server:
+smtp.gmail.com
+
+SMTP port:
+465 or 587
+
+Use SSL/TLS according to the selected port.
+
+Username:
+your Gmail address
+
+Password:
+Gmail App Password
+
+Do not use the normal Gmail password when the account requires an
+App Password.
+
+STEP 3 — Configure default content
+
+Set:
+
+Default Content Type:
+text/html
+
+Set the required recipient/default email settings.
+
+STEP 4 — Test
+
+Use:
+
+Test configuration
+
+Confirm that the test email arrives.
+
+STEP 5 — Add failure notification to pipeline
+
+Example:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    post {
+        failure {
+            emailext(
+                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "Hospital Management System Jenkins build failed.",
+                to: "team@example.com"
+            )
+        }
+    }
+}
+
+Replace team@example.com with the actual project team email.
+
+For Windows, replace sh with bat.
+
+
+------------------------------------------------------------
+Q2(b)
+Clone GitHub, build with Maven, execute tests and send email on failure
+using emailext.
+
+Use:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    post {
+        failure {
+            emailext(
+                subject: "Hospital Management Build FAILED",
+                body: "Hospital Management System build/test failed.\nJob: ${env.JOB_NAME}\nBuild: ${env.BUILD_NUMBER}\nURL: ${env.BUILD_URL}",
+                to: "team@example.com"
+            )
+        }
+    }
+}
+
+For Windows:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        bat 'mvn clean package'
+    }
+
+    stage('Test') {
+        bat 'mvn test'
+    }
+
+    post {
+        failure {
+            emailext(
+                subject: "Hospital Management Build FAILED",
+                body: "Hospital Management System build/test failed.",
+                to: "team@example.com"
+            )
+        }
+    }
+}
+
+Flow:
+
+GitHub
+→ Checkout
+→ Maven Build
+→ Tests
+→ Failure
+→ emailext
+→ Team email
+
+
+------------------------------------------------------------
+Q2(c)
+Intentionally introduce a build failure using an invalid command, detect
+the failure and send an email alert.
+
+STEP 1 — Create temporary test pipeline
+
+Linux Jenkins agent:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+
+    stage('Intentional Failure') {
+        sh 'invalid-command-for-test'
+    }
+
+    post {
+        failure {
+            emailext(
+                subject: "TEST ALERT: Hospital Management Jenkins FAILURE",
+                body: "Intentional Jenkins build failure detected.",
+                to: "team@example.com"
+            )
+        }
+    }
+}
+
+Windows Jenkins:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        bat 'mvn clean package'
+    }
+
+    stage('Intentional Failure') {
+        bat 'invalid-command-for-test'
+    }
+
+    post {
+        failure {
+            emailext(
+                subject: "TEST ALERT: Jenkins FAILURE",
+                body: "Intentional Jenkins build failure detected.",
+                to: "team@example.com"
+            )
+        }
+    }
+}
+
+STEP 2:
+Save.
+
+STEP 3:
+Click Build Now.
+
+STEP 4:
+Open Console Output.
+
+The invalid command should fail.
+
+STEP 5:
+Verify Jenkins shows a failed build.
+
+STEP 6:
+Verify the configured email receives the failure alert.
+
+STEP 7:
+Remove the intentional failure command after the demonstration.
+
+
+------------------------------------------------------------
+Q2(d)
+Receive notifications for both successful and failed builds.
+
+Use:
+
+node {
+
+    stage('Checkout') {
+        git 'https://github.com/Kumbhambhargavi75/HospitalManagementSystem'
+    }
+
+    stage('Build') {
+        sh 'mvn clean package'
+    }
+
+    stage('Test') {
+        sh 'mvn test'
+    }
+
+    post {
+
+        success {
+            emailext(
+                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "Hospital Management System build completed successfully.",
+                to: "team@example.com"
+            )
+        }
+
+        failure {
+            emailext(
+                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "Hospital Management System build failed.",
+                to: "team@example.com"
+            )
+        }
+    }
+}
+
+For Windows, use bat instead of sh.
+
+Result:
+
+Successful build
+→ success
+→ success email
+
+Failed build
+→ failure
+→ failure email
+
+
+============================================================
+SET 4 — QUESTION 3
+WORKING WITH MINIKUBE AND NAGIOS
+25 MARKS
+============================================================
+
+Q3(a)
+Run the Hospital Management System inside Kubernetes using Minikube.
+Create a deployment using the application Docker image and verify the
+application pod is running successfully.
+
+STEP 1 — Start Minikube
+
+minikube start
+
+STEP 2 — Check Minikube
+
+minikube status
+
+STEP 3 — Check Kubernetes node
+
+kubectl get nodes
+
+STEP 4 — Check application image
+
+docker images
+
+Find the application image name.
+
+Example:
+
+hospital-management:1.0
+
+STEP 5 — Create YAML
+
+Create:
+
+hospital-deployment.yaml
+
+Content:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hospital-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hospital-app
+  template:
+    metadata:
+      labels:
+        app: hospital-app
+    spec:
+      containers:
+      - name: hospital-container
+        image: hospital-management:1.0
+        ports:
+        - containerPort: 80
+
+Replace hospital-management:1.0 with the actual application Docker image.
+
+STEP 6 — Apply
+
+kubectl apply -f hospital-deployment.yaml
+
+STEP 7 — Check Deployment
+
+kubectl get deployments
+
+STEP 8 — Check Pods
+
+kubectl get pods
+
+Expected:
+
+hospital-app-xxxxx    1/1    Running
+
+STEP 9 — Describe pod
+
+kubectl describe pod <pod-name>
+
+STEP 10 — Check logs if required
+
+kubectl logs <pod-name>
+
+
+------------------------------------------------------------
+Q3(b)
+Scale the application deployment to FOUR replicas.
+
+STEP 1:
+
+kubectl get deployments
+
+STEP 2:
+
+kubectl scale deployment hospital-app --replicas=4
+
+STEP 3:
+
+kubectl get deployment
+
+Expected:
+
+4/4 ready/available.
+
+STEP 4:
+
+kubectl get pods
+
+Expected:
+
+4 running pods.
+
+STEP 5:
+
+kubectl get pods -o wide
+
+This verifies the four pods and their node/IP information.
+
+
+------------------------------------------------------------
+Q3(c)
+Expose the application using a NodePort service and access it through Minikube.
+
+STEP 1 — Create NodePort
+
+kubectl expose deployment hospital-app --type=NodePort --port=80
+
+STEP 2 — Check service
+
+kubectl get services
+
+STEP 3 — Get Minikube URL
+
+minikube service hospital-app --url
+
+STEP 4 — Open the returned URL in a browser.
+
+Or directly:
+
+minikube service hospital-app
+
+STEP 5 — Verify the application page loads.
+
+
+------------------------------------------------------------
+Q3(d)
+Run Nagios using Docker and access its web dashboard.
+
+STEP 1:
+
+docker pull jasonrivers/nagios:latest
+
+STEP 2:
+
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+STEP 3:
+
+docker ps
+
+STEP 4 — Open:
+
+http://localhost:8082
+
+STEP 5 — Login:
+
+Username:
+nagiosadmin
+
+Password:
+nagiosadmin
+
+Use the password configured in your setup if it has been changed.
+
+STEP 6 — Dashboard
+
+Check:
+
+Hosts
+Services
+Host status
+Service status
+OK
+WARNING
+CRITICAL
+UNKNOWN
+
+STEP 7 — Verify HTTP plugin
+
+docker exec nagios ls /opt/nagios/libexec/check_http
+
+STEP 8 — Connect Nagios to a Docker network when the monitored
+application is on that network:
+
+docker network connect library-network nagios
+
+STEP 9 — Example HTTP check:
+
+docker exec nagios /opt/nagios/libexec/check_http -H wordpress -p 80
+
+Expected healthy result:
+
+HTTP OK
+
+The hostname must match the monitored application's Docker network name.
+
+
+------------------------------------------------------------
+Q3(e)
+Application pod repeatedly restarts and becomes unavailable.
+Identify the cause and troubleshoot it.
+
+STEP 1 — Check pod status
+
+kubectl get pods
+
+Look for:
+
+CrashLoopBackOff
+Error
+ImagePullBackOff
+ErrImagePull
+Pending
+
+Also look at:
+
+RESTARTS
+
+STEP 2 — Describe pod
+
+kubectl describe pod <pod-name>
+
+Important section:
+
+Events
+
+STEP 3 — Check logs
+
+kubectl logs <pod-name>
+
+If the container has restarted:
+
+kubectl logs <pod-name> --previous
+
+STEP 4 — Identify cause.
+
+IMAGE ERROR:
+
+If:
+
+ImagePullBackOff
+ErrImagePull
+
+Check:
+
+docker images
+
+Verify image name in the YAML.
+
+If the image exists only in the local Docker environment, load it into
+Minikube:
+
+minikube image load hospital-management:1.0
+
+Then restart the deployment.
+
+APPLICATION ERROR:
+
+If the application starts and exits, check:
+
+kubectl logs <pod-name>
+
+Fix the application startup command/configuration.
+
+PORT ERROR:
+
+Check:
+
+kubectl describe pod <pod-name>
+
+Verify the containerPort and the application's real listening port.
+
+CONFIGURATION ERROR:
+
+Check environment variables and required database/configuration values.
+
+RESOURCE ERROR:
+
+Check pod Events and resource-related messages.
+
+STEP 5 — Restart deployment after fixing:
+
+kubectl rollout restart deployment hospital-app
+
+STEP 6 — Watch:
+
+kubectl get pods -w
+
+Wait for:
+
+Running
+
+STEP 7 — Check logs:
+
+kubectl logs <pod-name>
+
+STEP 8 — Check service:
+
+kubectl get services
+
+STEP 9 — Open:
+
+minikube service hospital-app
+
+Troubleshooting flow:
+
+get pods
+→ describe pod
+→ logs
+→ events
+→ identify cause
+→ fix
+→ rollout restart
+→ verify Running
+→ verify service
+
+
+============================================================
+SET 4 — QUESTION 4
+DEPLOYMENT IN AWS ENVIRONMENT
+25 MARKS
+============================================================
+
+Q4(a)
+Launch an Ubuntu EC2 instance using a free-tier-eligible configuration
+and deploy index.html using Docker and Nginx.
+
+STEP 1 — Start AWS Academy
+
+Open AWS Academy Learner Lab.
+
+Click:
+
+Start Lab
+
+Wait until active.
+
+Click:
+
+AWS
+
+to open AWS Management Console.
+
+STEP 2 — Open EC2
+
+Search:
+
+EC2
+
+Open:
+
+EC2
+→ Instances
+
+STEP 3 — Launch instance
+
+Click:
+
+Launch instances
+
+Name:
+
+Hospital-server
+
+AMI:
+
+Ubuntu Server
+
+Choose the Ubuntu version available/allowed in the lab.
+
+Instance type:
+
+Choose the free-tier-eligible/allowed type shown by the lab.
+
+STEP 4 — Key pair
+
+Select an existing permitted key pair or create one if allowed.
+
+STEP 5 — Security Group
+
+Add inbound rules:
+
+SSH
+Port 22
+Source My IP
+
+HTTP
+Port 80
+Source Anywhere-IPv4
+
+STEP 6 — Launch
+
+Click Launch instance.
+
+STEP 7 — Wait
+
+Instance state:
+
+Running
+
+Status checks:
+
+3/3 checks passed
+
+STEP 8 — Connect
+
+Select instance
+→ Connect
+→ EC2 Instance Connect
+→ Connect
+
+STEP 9 — Verify Ubuntu
+
+cat /etc/os-release
+
+STEP 10 — Update
+
+sudo apt update
+
+STEP 11 — Install Docker
+
+sudo apt install docker.io -y
+
+STEP 12 — Start Docker
+
+sudo systemctl start docker
+
+STEP 13 — Enable Docker
+
+sudo systemctl enable docker
+
+STEP 14 — Check Docker
+
+docker --version
+
+If normal docker commands are not permitted:
+
+sudo docker ps
+
+STEP 15 — Create website folder
+
+mkdir hospital-web
+cd hospital-web
+
+STEP 16 — Create index.html
+
+nano index.html
+
+Example:
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hospital Management System</title>
+</head>
+<body>
+    <h1>Hospital Management System</h1>
+    <p>Welcome to the Hospital Management System.</p>
+</body>
+</html>
+
+Save:
+Ctrl+O
+Enter
+Ctrl+X
+
+STEP 17 — Create Dockerfile
+
+nano Dockerfile
+
+Enter:
+
+FROM nginx:latest
+COPY index.html /usr/share/nginx/html/index.html
+
+Save.
+
+STEP 18 — Build image
+
+sudo docker build -t hospital-web:1.0 .
+
+STEP 19 — Verify
+
+sudo docker images
+
+STEP 20 — Run Nginx
+
+sudo docker run -d --name hospital-nginx -p 80:80 hospital-web:1.0
+
+STEP 21 — Check
+
+sudo docker ps
+
+STEP 22 — Test inside EC2
+
+curl http://localhost
+
+STEP 23 — Browser
+
+Copy Public IPv4 address.
+
+Open:
+
+http://<PUBLIC-IP>
+
+The Hospital Management System homepage should appear.
+
+
+------------------------------------------------------------
+Q4(b)
+Clone the website source from GitHub, create an Nginx Dockerfile and
+build the Docker image.
+
+STEP 1 — Connect to Ubuntu EC2.
+
+STEP 2 — Install Git
+
+sudo apt update
+sudo apt install git -y
+
+STEP 3 — Verify
+
+git --version
+
+STEP 4 — Clone
+
+git clone https://github.com/Kumbhambhargavi75/HospitalManagementSystem
+
+STEP 5 — Enter repository
+
+cd HospitalManagementSystem
+
+STEP 6 — List files
+
+ls
+
+Find the website files.
+
+STEP 7 — Create Dockerfile
+
+nano Dockerfile
+
+Use:
+
+FROM nginx:latest
+COPY . /usr/share/nginx/html/
+
+Save.
+
+STEP 8 — Build
+
+sudo docker build -t hospital-web:1.0 .
+
+STEP 9 — Verify
+
+sudo docker images
+
+STEP 10 — Run
+
+sudo docker run -d --name hospital-web-container -p 80:80 hospital-web:1.0
+
+STEP 11 — Verify
+
+sudo docker ps
+
+STEP 12 — Test
+
+curl http://localhost
+
+STEP 13 — Browser
+
+http://<PUBLIC-IP>
+
+
+------------------------------------------------------------
+Q4(c)
+Deploy the Maven Web Project on Ubuntu EC2 by cloning GitHub, creating
+a Docker image and running the application in a Docker container.
+
+IMPORTANT:
+A Maven Web Project normally produces a WAR file. Tomcat is used as the
+web container in this example.
+
+STEP 1 — Connect to Ubuntu EC2.
+
+STEP 2 — Install Git
+
+sudo apt update
+sudo apt install git -y
+
+STEP 3 — Install Java 17
+
+sudo apt install openjdk-17-jdk -y
+
+STEP 4 — Verify
+
+java -version
+
+STEP 5 — Install Maven
+
+sudo apt install maven -y
+
+STEP 6 — Verify
+
+mvn -version
+
+STEP 7 — Clone repository
+
+git clone https://github.com/Kumbhambhargavi75/HospitalManagementSystem
+
+STEP 8 — Enter project
+
+cd HospitalManagementSystem
+
+STEP 9 — Check
+
+ls
+
+Look for:
+
+pom.xml
+src
+
+STEP 10 — Build
+
+mvn clean package
+
+STEP 11 — Check target
+
+ls target
+
+Look for:
+
+*.war
+
+Example:
+
+hospital-management.war
+
+The actual filename depends on pom.xml.
+
+STEP 12 — Create Dockerfile
+
+nano Dockerfile
+
+Use:
+
+FROM tomcat:10.1
+COPY target/*.war /usr/local/tomcat/webapps/ROOT.war
+EXPOSE 8080
+CMD ["catalina.sh", "run"]
+
+Save.
+
+STEP 13 — Build image
+
+sudo docker build -t hospital-management:1.0 .
+
+STEP 14 — Verify
+
+sudo docker images
+
+STEP 15 — Run
+
+sudo docker run -d --name hospital-management -p 8080:8080 hospital-management:1.0
+
+STEP 16 — Check
+
+sudo docker ps
+
+STEP 17 — Check logs
+
+sudo docker logs hospital-management
+
+STEP 18 — Configure AWS Security Group
+
+Add:
+
+Type:
+Custom TCP
+
+Port:
+8080
+
+Source:
+Anywhere-IPv4
+
+STEP 19 — Browser
+
+http://<PUBLIC-IP>:8080
+
+If the application uses another context path, use that path.
+
+
+------------------------------------------------------------
+Q4(d)
+Docker container is running but website cannot be accessed through
+the public IPv4 address. Identify and configure inbound security-group
+rules.
+
+STEP 1 — Check EC2
+
+Instance state:
+
+Running
+
+STEP 2 — Check Docker
+
+sudo docker ps
+
+STEP 3 — Check port mapping
+
+sudo docker ps
+
+Look for:
+
+0.0.0.0:80->80/tcp
+
+or:
+
+0.0.0.0:8080->8080/tcp
+
+STEP 4 — Test locally
+
+For Nginx:
+
+curl http://localhost
+
+For Tomcat:
+
+curl http://localhost:8080
+
+If localhost works but public IP does not, inspect the Security Group.
+
+STEP 5 — Open Security Group
+
+AWS Console:
+
+EC2
+→ Instances
+→ Select Hospital-server
+→ Security
+→ Security groups
+→ Select the security group
+→ Inbound rules
+→ Edit inbound rules
+
+STEP 6 — For Nginx/HTTP port 80
+
+Add:
+
+Type:
+HTTP
+
+Protocol:
+TCP
+
+Port:
+80
+
+Source:
+Anywhere-IPv4
+
+Then:
+
+http://<PUBLIC-IP>
+
+STEP 7 — For Tomcat port 8080
+
+Add:
+
+Type:
+Custom TCP
+
+Protocol:
+TCP
+
+Port:
+8080
+
+Source:
+Anywhere-IPv4
+
+Then:
+
+http://<PUBLIC-IP>:8080
+
+STEP 8 — SSH rule
+
+Use:
+
+Type:
+SSH
+Port:
+22
+Source:
+My IP
+
+Avoid exposing SSH to 0.0.0.0/0 unless the lab specifically requires it.
+
+STEP 9 — Save
+
+Click:
+
+Save rules
+
+STEP 10 — Test browser again.
+
+Troubleshooting order:
+
+EC2 Running
+→ Docker Running
+→ Correct port mapping
+→ Application listening
+→ Security Group inbound rule
+→ Browser test
+
+
+------------------------------------------------------------
+Q4(e)
+Stop the Docker container and terminate the EC2 instance.
+
+STEP 1 — List running containers
+
+sudo docker ps
+
+STEP 2 — Stop Nginx container
+
+sudo docker stop hospital-nginx
+
+Or stop the Maven/Tomcat container:
+
+sudo docker stop hospital-management
+
+STEP 3 — Verify
+
+sudo docker ps
+
+The stopped container should not appear in the running list.
+
+STEP 4 — Optional remove stopped container
+
+sudo docker rm hospital-nginx
+
+or:
+
+sudo docker rm hospital-management
+
+STEP 5 — Open EC2
+
+AWS Console:
+
+EC2
+→ Instances
+
+STEP 6 — Select Hospital-server.
+
+STEP 7 — Terminate
+
+Instance state
+→ Terminate instance
+
+Confirm.
+
+STEP 8 — Verify state
+
+Shutting-down
+→ Terminated
+
+IMPORTANT:
+Docker cleanup and AWS cleanup are separate.
+
+Docker:
+sudo docker stop <container>
+sudo docker rm <container>
+
+AWS:
+EC2
+→ Terminate instance
+
+
+============================================================
+FINAL EXAM CHECKLIST
+============================================================
+
+Q1 — JENKINS SCRIPTED PIPELINE
+
+[ ] Create Pipeline
+[ ] Checkout GitHub
+[ ] Maven compile
+[ ] Maven test
+[ ] Maven package
+[ ] Separate stages
+[ ] Handle compilation failure
+[ ] Verify application before deployment
+[ ] Developer-triggered build
+
+Q2 — EMAIL
+
+[ ] Install Email Extension Plugin
+[ ] Configure SMTP
+[ ] Test SMTP
+[ ] emailext failure email
+[ ] Intentional invalid command
+[ ] Verify failure email
+[ ] Configure success email
+[ ] Configure failure email
+
+Q3 — MINIKUBE + NAGIOS
+
+[ ] minikube start
+[ ] kubectl get nodes
+[ ] Create Deployment
+[ ] Application Docker image
+[ ] Verify pod Running
+[ ] Scale to 4
+[ ] NodePort
+[ ] minikube service
+[ ] Nagios Docker image
+[ ] Nagios dashboard
+[ ] Host/service status
+[ ] Pod troubleshooting
+[ ] describe
+[ ] logs
+[ ] events
+[ ] Fix and restart
+
+Q4 — AWS
+
+[ ] Ubuntu EC2
+[ ] Free-tier-eligible/allowed instance type
+[ ] SSH rule
+[ ] HTTP rule
+[ ] Docker install
+[ ] index.html
+[ ] Nginx Dockerfile
+[ ] Build image
+[ ] Run container
+[ ] Browser test
+[ ] Git install
+[ ] Clone repository
+[ ] Nginx Dockerfile from repository
+[ ] Maven + Java
+[ ] mvn clean package
+[ ] WAR file
+[ ] Tomcat Dockerfile
+[ ] Docker image
+[ ] Run container
+[ ] Port 8080 rule
+[ ] Public IPv4 test
+[ ] Stop container
+[ ] Remove container
+[ ] Terminate EC2
+
+
+============================================================
+MOST IMPORTANT COMMANDS TO MEMORIZE
+============================================================
+
+JENKINS:
+
+mvn clean package
+mvn test
+
+MINIKUBE:
+
+minikube start
+minikube status
+kubectl get nodes
+kubectl apply -f hospital-deployment.yaml
+kubectl get pods
+kubectl scale deployment hospital-app --replicas=4
+kubectl expose deployment hospital-app --type=NodePort --port=80
+minikube service hospital-app
+kubectl describe pod <pod-name>
+kubectl logs <pod-name>
+kubectl logs <pod-name> --previous
+kubectl rollout restart deployment hospital-app
+
+NAGIOS:
+
+docker pull jasonrivers/nagios:latest
+docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+docker ps
+docker network connect library-network nagios
+docker exec nagios /opt/nagios/libexec/check_http -H wordpress -p 80
+
+AWS UBUNTU:
+
+sudo apt update
+sudo apt install docker.io -y
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo apt install git -y
+sudo apt install openjdk-17-jdk -y
+sudo apt install maven -y
+git clone <repository>
+mvn clean package
+sudo docker build -t hospital-web:1.0 .
+sudo docker run -d --name hospital-nginx -p 80:80 hospital-web:1.0
+sudo docker ps
+sudo docker logs <container>
+
+CLEANUP:
+
+sudo docker stop <container>
+sudo docker rm <container>
+AWS EC2 → Terminate instance
+
+
+END OF SET 4

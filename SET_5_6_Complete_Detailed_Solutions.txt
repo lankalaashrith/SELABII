@@ -1,0 +1,1413 @@
+SOFTWARE ENGINEERING LAB INTERNAL II
+DETAILED STEP-BY-STEP SOLUTIONS
+SETS 5 AND 6
+
+IMPORTANT:
+- These procedures follow the uploaded question papers.
+- Run commands from the directory mentioned in each step.
+- Replace placeholders such as <IMAGE_NAME>, <USERNAME>, <PUBLIC_IP>, and <REPO_URL> with the values from your lab.
+- If a question says "execute", actually run the verification command and show the result to the examiner.
+
+============================================================
+SET 5 — DETAILED SOLUTIONS
+============================================================
+
+SOURCE REPOSITORY:
+https://github.com/Kumbhambhargavi75/FoodSystem
+
+SET 5 PAPER STRUCTURE
+Q1 Docker Compose – Flask API, Nginx
+Q2 Jenkins Scripted Pipeline – Food Management System
+Q3 Kubernetes – Expose & Access Nginx Using Minikube
+Q4 AWS EC2 Deployment
+
+------------------------------------------------------------
+Q1 — DOCKER COMPOSE: FLASK API + NGINX
+------------------------------------------------------------
+
+(a) Run Flask API and Nginx in separate containers, with Flask on port 5000 and Nginx on port 80.
+
+STEP 1: Check Docker
+    docker --version
+    docker ps
+
+STEP 2: Go to the FoodSystem project directory.
+    cd <FoodSystem-project-directory>
+    ls
+
+Look for the Flask application and the Nginx/frontend files.
+
+STEP 3: Create a Dockerfile for Flask if the repository does not already contain one.
+Example:
+    FROM python:3.11
+    WORKDIR /app
+    COPY . .
+    RUN pip install -r requirements.txt
+    EXPOSE 5000
+    CMD ["python", "app.py"]
+
+Use the repository's actual Flask start file if it is not app.py.
+
+STEP 4: Build the Flask image.
+    docker build -t food-flask .
+
+STEP 5: Create docker-compose.yml.
+Use:
+    services:
+      flask:
+        build: .
+        container_name: food-flask
+        ports:
+          - "5000:5000"
+
+      nginx:
+        image: nginx:latest
+        container_name: food-nginx
+        ports:
+          - "80:80"
+
+STEP 6: Start both services.
+    docker compose up -d
+
+STEP 7: Verify.
+    docker compose ps
+    docker ps
+
+Expected: both flask and nginx containers are running.
+
+STEP 8: Test Flask.
+    curl http://localhost:5000
+
+STEP 9: Test Nginx.
+Open:
+    http://localhost
+
+If port 80 is already occupied, use a different HOST port such as 8080:
+    "8080:80"
+Then open:
+    http://localhost:8080
+
+(b) Avoid port conflicts when both services run on one Docker host.
+
+Use different HOST ports if another process already owns the required port.
+
+Example:
+    flask:
+      ports:
+        - "5000:5000"
+
+    nginx:
+      ports:
+        - "80:80"
+
+If port 80 is occupied:
+    nginx:
+      ports:
+        - "8080:80"
+
+Important rule:
+HOST_PORT:CONTAINER_PORT
+
+(c) Run both services simultaneously.
+
+STEP 1:
+    docker compose up -d
+
+STEP 2:
+    docker compose ps
+
+STEP 3:
+    docker compose logs
+
+STEP 4:
+    curl http://localhost:5000
+
+STEP 5:
+    Open Nginx in browser:
+    http://localhost
+
+(d) Separate Flask and Nginx containers with host ports 5000 and 80.
+
+The Compose configuration is:
+    services:
+      flask:
+        build: .
+        ports:
+          - "5000:5000"
+
+      nginx:
+        image: nginx:latest
+        ports:
+          - "80:80"
+
+Start:
+    docker compose up -d
+
+Verify:
+    docker ps
+
+(e) Complete solution.
+
+Example complete docker-compose.yml:
+    services:
+      flask:
+        build: .
+        container_name: food-flask
+        ports:
+          - "5000:5000"
+        networks:
+          - food-network
+
+      nginx:
+        image: nginx:latest
+        container_name: food-nginx
+        ports:
+          - "80:80"
+        networks:
+          - food-network
+        depends_on:
+          - flask
+
+    networks:
+      food-network:
+
+Run:
+    docker compose up -d
+
+Verify:
+    docker compose ps
+    docker network ls
+    docker network inspect <project-name>_food-network
+
+Useful cleanup:
+    docker compose down
+    docker compose down --volumes
+
+Do not use --volumes unless you intentionally want to remove Compose-managed volumes.
+
+------------------------------------------------------------
+Q2 — JENKINS SCRIPTED PIPELINE: FOOD MANAGEMENT SYSTEM
+------------------------------------------------------------
+
+(a) Clone GitHub and run Maven clean/install.
+
+STEP 1: Start Jenkins.
+Open:
+    http://localhost:8080
+
+STEP 2: Create a Pipeline job.
+    New Item
+    Name: Food-Management-Pipeline
+    Select: Pipeline
+    OK
+
+STEP 3: Configure the Pipeline script.
+
+Use:
+    node {
+        stage('Clone') {
+            git url: 'https://github.com/Kumbhambhargavi75/FoodSystem',
+                branch: 'main'
+        }
+
+        stage('Maven Clean') {
+            sh 'mvn clean'
+        }
+
+        stage('Maven Install') {
+            sh 'mvn install'
+        }
+    }
+
+If Jenkins runs on Windows, use:
+    bat 'mvn clean'
+    bat 'mvn install'
+
+STEP 4: Save and click Build Now.
+
+STEP 5: Open Console Output and verify:
+    BUILD SUCCESS
+
+(b) Reference configured Maven installation.
+
+If Jenkins has a Maven installation configured under:
+    Manage Jenkins -> Tools
+
+Use a configured Maven tool in the Pipeline.
+
+Example:
+    node {
+        def mvn = tool name: 'Maven-3.9.16', type: 'maven'
+
+        stage('Clone') {
+            git url: 'https://github.com/Kumbhambhargavi75/FoodSystem',
+                branch: 'main'
+        }
+
+        stage('Build') {
+            sh "${mvn}/bin/mvn clean install"
+        }
+    }
+
+If Maven is already available directly through PATH,:
+    sh 'mvn clean install'
+
+(c) Separate Clone, Install and Test stages.
+
+Use:
+    node {
+        stage('GitHub Clone') {
+            git url: 'https://github.com/Kumbhambhargavi75/FoodSystem',
+                branch: 'main'
+        }
+
+        stage('Install') {
+            sh 'mvn install -DskipTests'
+        }
+
+        stage('Test') {
+            sh 'mvn test'
+        }
+    }
+
+For Windows agents replace sh with bat.
+
+(d) Run automatically when GitHub changes.
+
+STEP 1: In Jenkins job:
+    Configure -> Build Triggers
+
+STEP 2: Select:
+    GitHub hook trigger for GITScm polling
+
+STEP 3: In GitHub repository:
+    Settings -> Webhooks -> Add webhook
+
+STEP 4: Payload URL:
+    http://<JENKINS_HOST>/github-webhook/
+
+STEP 5: Content type:
+    application/json
+
+STEP 6: Select push event.
+
+STEP 7: Save webhook.
+
+If the lab cannot expose Jenkins to GitHub, use Poll SCM instead:
+    H/5 * * * *
+
+This periodically checks the repository for changes.
+
+(e) GitHub checkout + clean + install + test + package.
+
+Use:
+    node {
+        stage('Checkout') {
+            git url: 'https://github.com/Kumbhambhargavi75/FoodSystem',
+                branch: 'main'
+        }
+
+        stage('Clean') {
+            sh 'mvn clean'
+        }
+
+        stage('Install') {
+            sh 'mvn install'
+        }
+
+        stage('Test') {
+            sh 'mvn test'
+        }
+
+        stage('Package') {
+            sh 'mvn package'
+        }
+    }
+
+After success:
+    ls target
+
+Look for the generated JAR/WAR.
+
+If the project produces a WAR, archive:
+    archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+
+If it produces a JAR:
+    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+
+------------------------------------------------------------
+Q3 — KUBERNETES: EXPOSE & ACCESS NGINX USING MINIKUBE
+------------------------------------------------------------
+
+(a) Start Minikube and deploy the application using its Docker image.
+
+STEP 1:
+    minikube start
+
+STEP 2:
+    minikube status
+
+STEP 3:
+    kubectl get nodes
+
+STEP 4: If the required Docker image is local and Minikube cannot see it, use:
+    minikube image load <IMAGE_NAME>:<TAG>
+
+STEP 5: Create deployment YAML, for example library:
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: food-app
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: food-app
+      template:
+        metadata:
+          labels:
+            app: food-app
+        spec:
+          containers:
+          - name: food-container
+            image: nginx:latest
+            ports:
+            - containerPort: 80
+
+Save as:
+    food-deployment.yaml
+
+STEP 6:
+    kubectl apply -f food-deployment.yaml
+
+STEP 7:
+    kubectl get deployments
+    kubectl get pods
+
+(b) Scale to four replicas.
+
+Run:
+    kubectl scale deployment food-app --replicas=4
+
+Verify:
+    kubectl get deployment
+    kubectl get pods
+
+Expected: 4 running pods.
+
+(c) Expose using NodePort and verify browser access.
+
+STEP 1:
+    kubectl expose deployment food-app --type=NodePort --port=80
+
+STEP 2:
+    kubectl get services
+
+STEP 3:
+    minikube service food-app
+
+This opens the service in the browser.
+
+To get the URL:
+    minikube service food-app --url
+
+(d) Run Nagios using Docker and check host/service status.
+
+STEP 1:
+    docker pull jasonrivers/nagios:latest
+
+STEP 2:
+    docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+STEP 3:
+    docker ps
+
+STEP 4: Open:
+    http://localhost:8082
+
+Login commonly used by this image:
+    Username: nagiosadmin
+    Password: nagiosadmin
+
+STEP 5: Open the Nagios dashboard and inspect:
+    Hosts
+    Services
+    OK
+    WARNING
+    CRITICAL
+
+STEP 6: Verify HTTP plugin:
+    docker exec nagios ls /opt/nagios/libexec/check_http
+
+(e) Troubleshoot Pending pods after an image update.
+
+STEP 1:
+    kubectl get pods
+
+STEP 2:
+    kubectl describe pod <PENDING-POD-NAME>
+
+Look at:
+    Events:
+
+Typical causes:
+    - Image cannot be pulled
+    - Wrong image name/tag
+    - Insufficient resources
+    - Scheduling constraints
+    - Storage/resource problems
+
+STEP 3:
+    kubectl get events --sort-by=.lastTimestamp
+
+STEP 4:
+    kubectl describe deployment food-app
+
+STEP 5:
+    Check image:
+    kubectl get deployment food-app -o yaml
+
+STEP 6: If the image tag is wrong, set a valid image:
+    kubectl set image deployment/food-app food-container=nginx:1.27
+
+STEP 7:
+    kubectl rollout status deployment/food-app
+
+STEP 8:
+    kubectl get pods
+
+------------------------------------------------------------
+Q4 — AWS EC2 DEPLOYMENT
+------------------------------------------------------------
+
+(a) Ubuntu EC2 + Docker + Nginx + index.html.
+
+STEP 1: Start AWS Academy lab and open AWS Console.
+
+STEP 2: EC2 -> Instances -> Launch instances.
+
+Choose:
+    Ubuntu Server
+
+Choose the allowed instance type.
+
+Create/select a key pair.
+
+STEP 3: Security group inbound rules:
+    SSH 22 -> My IP
+    HTTP 80 -> Anywhere-IPv4
+
+STEP 4: Launch instance.
+
+STEP 5: Wait for:
+    Running
+    Status checks passed
+
+STEP 6: Connect using EC2 Instance Connect if available, or SSH.
+
+For SSH:
+    chmod 400 <key>.pem
+    ssh -i <key>.pem ubuntu@<PUBLIC_IP>
+
+STEP 7: Install Docker.
+    sudo apt update
+    sudo apt install -y docker.io
+    sudo systemctl enable --now docker
+
+Check:
+    docker --version
+
+STEP 8: Create website:
+    mkdir -p ~/food-site
+    cd ~/food-site
+    nano index.html
+
+Put:
+    <html>
+    <body>
+    <h1>Food Management System</h1>
+    <p>Welcome to the Food Management System</p>
+    </body>
+    </html>
+
+STEP 9: Run Nginx:
+    docker run -d --name food-nginx -p 80:80 -v ~/food-site:/usr/share/nginx/html:ro nginx:latest
+
+STEP 10:
+    docker ps
+
+STEP 11: Browser:
+    http://<PUBLIC_IP>
+
+(b) Clone GitHub and build Docker image.
+
+STEP 1:
+    sudo apt update
+    sudo apt install -y git
+
+STEP 2:
+    git clone https://github.com/Kumbhambhargavi75/FoodSystem
+    cd FoodSystem
+
+STEP 3: Create/verify Dockerfile.
+
+Example:
+    FROM python:3.11
+    WORKDIR /app
+    COPY . .
+    RUN pip install -r requirements.txt
+    EXPOSE 5000
+    CMD ["python", "app.py"]
+
+STEP 4:
+    docker build -t food-system:1.0 .
+
+STEP 5:
+    docker images
+
+(c) Maven Web Project -> Docker image -> run container.
+
+STEP 1:
+    cd <cloned-maven-project>
+
+STEP 2: Verify:
+    ls
+    cat pom.xml
+
+STEP 3: Build the Maven project if needed:
+    mvn clean package
+
+STEP 4: Create Dockerfile for a WAR-based web application.
+
+Example:
+    FROM tomcat:10
+    COPY target/*.war /usr/local/tomcat/webapps/food.war
+    EXPOSE 8080
+    CMD ["catalina.sh", "run"]
+
+STEP 5:
+    docker build -t cems-food:1.0 .
+
+STEP 6: Run on host port 9090:
+    docker run -d --name cems-food -p 9090:8080 cems-food:1.0
+
+STEP 7:
+    docker ps
+
+STEP 8:
+    curl http://localhost:9090
+
+STEP 9: Browser:
+    http://<PUBLIC_IP>:9090
+
+(d) Allow port 9090 in Security Group.
+
+STEP 1:
+    AWS Console -> EC2 -> Security Groups
+
+STEP 2:
+    Select the instance security group.
+
+STEP 3:
+    Inbound rules -> Edit inbound rules.
+
+STEP 4: Add:
+    Type: Custom TCP
+    Port: 9090
+    Source: Anywhere-IPv4
+
+STEP 5: Save rules.
+
+STEP 6: Verify the container:
+    docker ps
+
+STEP 7: Test locally on EC2:
+    curl http://localhost:9090
+
+STEP 8: Test from browser:
+    http://<PUBLIC_IP>:9090
+
+If local curl works but browser does not, check the Security Group and whether the application is listening on 0.0.0.0 inside the container.
+
+(e) Stop container and terminate EC2.
+
+STEP 1: Stop application container:
+    docker stop cems-food
+
+STEP 2: Optional remove container:
+    docker rm cems-food
+
+STEP 3: In AWS Console:
+    EC2 -> Instances
+
+STEP 4: Select the instance.
+
+STEP 5:
+    Instance state -> Terminate instance
+
+STEP 6: Confirm termination.
+
+STEP 7: Verify the instance becomes:
+    Terminated
+
+Do not terminate the instance until you have completed the practical demonstration and saved required screenshots/results.
+
+============================================================
+SET 6 — DETAILED SOLUTIONS
+============================================================
+
+SOURCE REPOSITORY:
+https://github.com/Kumbhambhargavi75/CEMS
+
+------------------------------------------------------------
+Q1 — DOCKER COMPOSE: WORDPRESS + MYSQL
+------------------------------------------------------------
+
+(a) Run WordPress and MySQL.
+
+STEP 1:
+    docker --version
+    docker ps
+
+STEP 2: Create a working directory:
+    mkdir cems-compose
+    cd cems-compose
+
+STEP 3: Create docker-compose.yml.
+
+Use:
+    services:
+      db:
+        image: mysql:5.7
+        container_name: cems-mysql
+        environment:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress
+          MYSQL_USER: wpuser
+          MYSQL_PASSWORD: wppass
+
+      wordpress:
+        image: wordpress:latest
+        container_name: cems-wordpress
+        ports:
+          - "8080:80"
+        environment:
+          WORDPRESS_DB_HOST: db:3306
+          WORDPRESS_DB_USER: wpuser
+          WORDPRESS_DB_PASSWORD: wppass
+          WORDPRESS_DB_NAME: wordpress
+        depends_on:
+          - db
+
+STEP 4:
+    docker compose up -d
+
+STEP 5:
+    docker compose ps
+
+STEP 6:
+    docker ps
+
+(b) Host port 8080 -> container port 80.
+
+The required mapping is:
+    ports:
+      - "8080:80"
+
+Verify:
+    docker ps
+
+Then open:
+    http://localhost:8080
+
+(c) Configure depends_on.
+
+Inside wordpress:
+    depends_on:
+      - db
+
+This tells Compose to start the db service before the WordPress service.
+
+Important: depends_on controls startup order; it does not guarantee that MySQL is fully ready to accept connections.
+
+(d) Named volume for persistent MySQL data.
+
+Add:
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+At the bottom of the Compose file add:
+    volumes:
+      mysql-data:
+
+Then verify:
+    docker volume ls
+
+The volume stores MySQL data outside the container lifecycle.
+
+(e) Complete Compose file.
+
+Use:
+    services:
+      db:
+        image: mysql:5.7
+        container_name: cems-mysql
+        environment:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress
+          MYSQL_USER: wpuser
+          MYSQL_PASSWORD: wppass
+        volumes:
+          - mysql-data:/var/lib/mysql
+
+      wordpress:
+        image: wordpress:latest
+        container_name: cems-wordpress
+        ports:
+          - "8080:80"
+        environment:
+          WORDPRESS_DB_HOST: db:3306
+          WORDPRESS_DB_USER: wpuser
+          WORDPRESS_DB_PASSWORD: wppass
+          WORDPRESS_DB_NAME: wordpress
+        depends_on:
+          - db
+
+    volumes:
+      mysql-data:
+
+Run:
+    docker compose up -d
+
+Verify:
+    docker compose ps
+    docker volume ls
+
+Open:
+    http://localhost:8080
+
+Stop:
+    docker compose down
+
+The named volume remains unless explicitly removed with:
+    docker compose down -v
+
+------------------------------------------------------------
+Q2 — JENKINS SCRIPTED PIPELINE: BUILD, TEST & PUBLISH
+------------------------------------------------------------
+
+(a) GitHub checkout + Maven clean/install/test/package.
+
+STEP 1: Jenkins:
+    http://localhost:8080
+
+STEP 2:
+    New Item -> CEMS-Pipeline -> Pipeline -> OK
+
+STEP 3: Use Pipeline script:
+    node {
+        stage('Checkout') {
+            git url: 'https://github.com/Kumbhambhargavi75/CEMS',
+                branch: 'main'
+        }
+
+        stage('Clean') {
+            sh 'mvn clean'
+        }
+
+        stage('Install') {
+            sh 'mvn install'
+        }
+
+        stage('Test') {
+            sh 'mvn test'
+        }
+
+        stage('Package') {
+            sh 'mvn package'
+        }
+    }
+
+On Windows Jenkins agents, replace sh with bat.
+
+STEP 4:
+    Save -> Build Now
+
+STEP 5:
+    Console Output
+
+Verify:
+    BUILD SUCCESS
+
+(b) Use configured Maven installation.
+
+If Maven is configured as:
+    Maven-3.9.16
+
+Use:
+    node {
+        def mvn = tool name: 'Maven-3.9.16', type: 'maven'
+
+        stage('Checkout') {
+            git url: 'https://github.com/Kumbhambhargavi75/CEMS',
+                branch: 'main'
+        }
+
+        stage('Build') {
+            sh "${mvn}/bin/mvn clean install"
+        }
+    }
+
+The Maven name must exactly match the name configured in:
+    Manage Jenkins -> Tools
+
+(c) Separate checkout/install/test stages.
+
+Use:
+    node {
+        stage('GitHub Checkout') {
+            git url: 'https://github.com/Kumbhambhargavi75/CEMS',
+                branch: 'main'
+        }
+
+        stage('Install') {
+            sh 'mvn install -DskipTests'
+        }
+
+        stage('Test') {
+            sh 'mvn test'
+        }
+    }
+
+(d) Run every day at 6 PM.
+
+Use Jenkins cron trigger:
+    0 18 * * *
+
+In the Pipeline script:
+    node {
+        properties([
+            pipelineTriggers([
+                cron('0 18 * * *')
+            ])
+        ])
+
+        stage('Checkout') {
+            git url: 'https://github.com/Kumbhambhargavi75/CEMS',
+                branch: 'main'
+        }
+
+        stage('Build') {
+            sh 'mvn clean install test'
+        }
+    }
+
+Important: Jenkins cron uses the Jenkins controller/agent time zone. Confirm the Jenkins time zone if the lab specifically expects local 6 PM.
+
+(e) Generate WAR package.
+
+Use:
+    node {
+        stage('Checkout') {
+            git url: 'https://github.com/Kumbhambhargavi75/CEMS',
+                branch: 'main'
+        }
+
+        stage('Clean') {
+            sh 'mvn clean'
+        }
+
+        stage('Install') {
+            sh 'mvn install'
+        }
+
+        stage('Test') {
+            sh 'mvn test'
+        }
+
+        stage('Package WAR') {
+            sh 'mvn package'
+        }
+
+        stage('Archive WAR') {
+            archiveArtifacts artifacts: 'target/*.war',
+                              fingerprint: true
+        }
+    }
+
+Verify:
+    target/*.war
+
+If Maven says no WAR is produced, inspect pom.xml and confirm:
+    <packaging>war</packaging>
+
+Do not invent a WAR filename; use:
+    ls target
+to find the actual generated file.
+
+------------------------------------------------------------
+Q3 — KUBERNETES: DEPLOY AND SCALE APPLICATION
+------------------------------------------------------------
+
+(a) Deploy CEMS using Minikube and its Docker image.
+
+STEP 1:
+    minikube start
+
+STEP 2:
+    minikube status
+
+STEP 3:
+    kubectl get nodes
+
+STEP 4: If image is local:
+    minikube image load <CEMS_IMAGE>:<TAG>
+
+STEP 5: Create deployment file:
+    cems-deployment.yaml
+
+Example:
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: cems
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: cems
+      template:
+        metadata:
+          labels:
+            app: cems
+        spec:
+          containers:
+          - name: cems-container
+            image: <CEMS_IMAGE>:<TAG>
+            ports:
+            - containerPort: 8080
+
+Use the actual image and container port from your project.
+
+STEP 6:
+    kubectl apply -f cems-deployment.yaml
+
+STEP 7:
+    kubectl get deployments
+    kubectl get pods
+
+(b) Scale to 5 replicas.
+
+Run:
+    kubectl scale deployment cems --replicas=5
+
+Verify:
+    kubectl get deployment cems
+    kubectl get pods
+
+Expected:
+    5 replicas/pods.
+
+(c) Expose using NodePort.
+
+Run:
+    kubectl expose deployment cems --type=NodePort --port=8080
+
+Verify:
+    kubectl get services
+
+Then:
+    minikube service cems
+
+(d) Service distributes requests across 5 replicas.
+
+The Service selects pods using the deployment label:
+    app: cems
+
+Verify:
+    kubectl get pods --show-labels
+
+Verify service:
+    kubectl describe service cems
+
+The Service provides one stable access point while traffic is sent to available matching pods.
+
+(e) Deploy 5 replicas + NodePort + browser verification.
+
+Run:
+    kubectl scale deployment cems --replicas=5
+
+Then:
+    kubectl expose deployment cems --type=NodePort --port=8080
+
+If the service already exists, do not expose it again. Use:
+    kubectl get services
+
+Open:
+    minikube service cems
+
+Or get URL:
+    minikube service cems --url
+
+Verify:
+    kubectl get pods
+    kubectl get services
+
+------------------------------------------------------------
+Q4 — NAGIOS + MINIKUBE MONITORING
+------------------------------------------------------------
+
+(a) Start Minikube and create Deployment.
+
+STEP 1:
+    minikube start
+
+STEP 2:
+    kubectl get nodes
+
+STEP 3:
+    kubectl apply -f cems-deployment.yaml
+
+STEP 4:
+    kubectl get deployments
+    kubectl get pods
+
+(b) Scale to 4 replicas.
+
+Run:
+    kubectl scale deployment cems --replicas=4
+
+Verify:
+    kubectl get pods
+
+(c) NodePort + Minikube URL.
+
+Run:
+    kubectl expose deployment cems --type=NodePort --port=8080
+
+Verify:
+    kubectl get services
+
+Open:
+    minikube service cems
+
+Or:
+    minikube service cems --url
+
+(d) Run Nagios using Docker.
+
+STEP 1:
+    docker pull jasonrivers/nagios:latest
+
+STEP 2:
+    docker run -d --name nagios -p 8082:80 jasonrivers/nagios:latest
+
+STEP 3:
+    docker ps
+
+STEP 4:
+    http://localhost:8082
+
+Login:
+    nagiosadmin
+    nagiosadmin
+
+STEP 5: Inspect dashboard:
+    Hosts
+    Services
+    Host status
+    Service status
+
+For HTTP checking:
+    docker exec nagios ls /opt/nagios/libexec/check_http
+
+If Nagios needs to check a Docker-hosted service, put the relevant containers on a network that Nagios can access.
+
+(e) Roll back a failed CEMS Deployment.
+
+STEP 1: Check current rollout:
+    kubectl rollout status deployment/cems
+
+STEP 2: View history:
+    kubectl rollout history deployment/cems
+
+STEP 3: If the new version is broken:
+    kubectl rollout undo deployment/cems
+
+STEP 4:
+    kubectl rollout status deployment/cems
+
+STEP 5:
+    kubectl get pods
+
+STEP 6: Confirm service:
+    kubectl get services
+
+The key rollback command is:
+    kubectl rollout undo deployment/cems
+
+------------------------------------------------------------
+Q5 — AWS EC2: MAVEN WEB APPLICATION USING DOCKER
+------------------------------------------------------------
+
+(a) Ubuntu EC2 + Docker + Nginx + index.html.
+
+STEP 1:
+    AWS Console -> EC2 -> Launch instances
+
+Choose:
+    Ubuntu Server
+
+Choose permitted instance type.
+
+Choose/create key pair.
+
+Security Group:
+    SSH 22 -> My IP
+    HTTP 80 -> Anywhere-IPv4
+
+STEP 2:
+    Launch instance
+
+STEP 3:
+    Wait for:
+    Running
+    Status checks passed
+
+STEP 4: Connect with SSH.
+
+On local machine:
+    chmod 400 <key>.pem
+    ssh -i <key>.pem ubuntu@<PUBLIC_IP>
+
+STEP 5: Install Docker.
+    sudo apt update
+    sudo apt install -y docker.io
+    sudo systemctl enable --now docker
+
+Check:
+    docker --version
+
+STEP 6: Create website:
+    mkdir -p ~/cems-site
+    cd ~/cems-site
+    nano index.html
+
+Example:
+    <html>
+    <body>
+    <h1>Campus Event Management System</h1>
+    </body>
+    </html>
+
+STEP 7: Run Nginx:
+    docker run -d --name cems-nginx -p 80:80 -v ~/cems-site:/usr/share/nginx/html:ro nginx:latest
+
+STEP 8:
+    docker ps
+
+STEP 9:
+    curl http://localhost
+
+STEP 10: Browser:
+    http://<PUBLIC_IP>
+
+(b) SSH + clone GitHub + Docker image.
+
+STEP 1:
+    sudo apt update
+    sudo apt install -y git
+
+STEP 2:
+    git clone https://github.com/Kumbhambhargavi75/CEMS
+    cd CEMS
+
+STEP 3:
+    ls
+
+STEP 4: Create/verify Dockerfile.
+
+For a Maven web application:
+    FROM tomcat:10
+    COPY target/*.war /usr/local/tomcat/webapps/cems.war
+    EXPOSE 8080
+    CMD ["catalina.sh", "run"]
+
+STEP 5: Build:
+    docker build -t cems-app:1.0 .
+
+(c) Build and run Maven Web Project.
+
+STEP 1:
+    cd CEMS
+
+STEP 2:
+    mvn clean package
+
+STEP 3:
+    ls target
+
+Confirm the WAR exists.
+
+STEP 4:
+    docker build -t cems-app:1.0 .
+
+STEP 5:
+    docker run -d --name cems-app -p 9090:8080 cems-app:1.0
+
+STEP 6:
+    docker ps
+
+STEP 7:
+    curl http://localhost:9090
+
+STEP 8:
+    Browser:
+    http://<PUBLIC_IP>:9090
+
+(d) Troubleshoot SSH using .pem key.
+
+STEP 1: Check the key file permissions:
+    chmod 400 <key>.pem
+
+STEP 2: Use correct username for Ubuntu:
+    ubuntu
+
+Command:
+    ssh -i <key>.pem ubuntu@<PUBLIC_IP>
+
+STEP 3: If connection is refused/timeouts, check Security Group:
+    SSH
+    TCP
+    22
+    Source: My IP
+
+STEP 4: Check instance state:
+    Running
+
+STEP 5: Check status checks:
+    3/3 checks passed, or equivalent healthy status shown by the console.
+
+STEP 6: Confirm the public IP is current. A stopped/restarted EC2 instance can receive a new public IP if no Elastic IP is attached.
+
+STEP 7: Retry:
+    ssh -i <key>.pem ubuntu@<PUBLIC_IP>
+
+Common errors:
+    Permission denied (publickey)
+        -> wrong key, wrong username, or wrong instance.
+
+    Connection timed out
+        -> Security Group/network path/public IP issue.
+
+    Connection refused
+        -> SSH service/instance-side issue, or wrong port.
+
+(e) Browser cannot access CEMS.
+
+STEP 1: Check container:
+    docker ps
+
+STEP 2: Check application locally:
+    curl http://localhost:9090
+
+STEP 3: Check Security Group inbound rules.
+
+Add:
+    Type: Custom TCP
+    Protocol: TCP
+    Port: 9090
+    Source: Anywhere-IPv4
+
+For a lab demonstration, this allows external browser traffic.
+
+STEP 4: Save rules.
+
+STEP 5: Open:
+    http://<PUBLIC_IP>:9090
+
+If it still fails, check:
+    docker logs cems-app
+
+Then:
+    docker exec -it cems-app <appropriate-command>
+
+Also confirm the application listens on the container's expected port and Docker maps:
+    host 9090 -> container 8080
+
+FINAL QUICK REVISION
+SET 5:
+Docker Compose -> Flask 5000 + Nginx 80
+Jenkins -> Git + Maven clean/install/test/package
+Kubernetes -> Minikube + Deployment + 4 replicas + NodePort + Nagios + Pending troubleshooting
+AWS -> Ubuntu + Docker + Nginx + GitHub + Maven/WAR + port 9090 + cleanup
+
+SET 6:
+Docker Compose -> WordPress + MySQL + 8080:80 + depends_on + volume
+Jenkins -> GitHub + clean/install/test/package + Maven tool + 6 PM cron + WAR archive
+Kubernetes -> Minikube + 5 replicas + NodePort + Service
+Nagios -> Docker dashboard + Kubernetes rollback
+AWS -> Ubuntu + Docker/Nginx + GitHub + Docker image + Maven WAR + SSH .pem + Security Group 9090
+
+KEY COMMANDS TO MEMORIZE:
+docker compose up -d
+docker compose ps
+docker compose down
+docker build -t <image>:<tag> .
+docker run -d --name <name> -p <host>:<container> <image>
+docker ps
+git clone <repo>
+mvn clean package
+kubectl apply -f <file>.yaml
+kubectl get pods
+kubectl scale deployment <name> --replicas=5
+kubectl expose deployment <name> --type=NodePort --port=<port>
+minikube service <name>
+kubectl rollout history deployment/<name>
+kubectl rollout undo deployment/<name>
+aws/EC2 -> Security Group -> Inbound rules -> SSH 22 / HTTP 80 / Custom TCP 9090
+
+END
+
+
+KESHAV MEMORIAL INSTITUTE OF TECHNOLOGY
+(AN AUTONOMOUS INSTITUTE)
+Accredited by NBA & NAAC, Approved by AICTE, Affiliated to JNTUH, Hyderabad
+A.Y 2026-2027
+Department of Computer Science & Engineering((AI& ML)
+Lab Internal II 
+Subject Name: Software Engineering                                                                Subject Code: 23CC505PC
+Year and Semester:   III /I                                                                                   Max. Marks: 100                                                                                  
+Answer the following :
+You are given the following GitHub repository link:
+https://github.com/Kumbhambhargavi75/CEMS     Solve the following  and  execute it 
+Q1. Docker Compose – WordPress and MySQL (25 Marks)
+a) A company wants to create a blogging website using WordPress and MySQL. Write a Docker Compose file to run both containers.
+b) Users cannot access the WordPress website. Configure port mapping from host port 8080 to container port 80.
+c) WordPress starts before MySQL and causes database errors. Use depends_on to configure the service dependency.
+d) A company wants to protect its blog data from loss when the MySQL container stops. Configure a named volume for persistent storage.
+e) Create a complete Docker Compose file to run WordPress and MySQL with port mapping, service dependency and persistent storage.
+Q2. Jenkins Scripted Pipeline – Build, Test & Publish (25 Marks)
+A college wants to automate the build process of its Campus Event Management System. Create a Jenkins Pipeline that clones the CEMS source code from GitHub and executes Maven clean, install, test and package commands.
+The college development team has configured Maven in Jenkins and wants to use it in the CEMS pipeline. Create a Jenkins Pipeline that references the configured Maven installation and builds the application successfully.
+The college wants to verify the correctness of its event registration application before releasing it to students. Create a Jenkins Pipeline with separate stages for GitHub cloning, application installation and Maven testing.
+The college administrator wants the CEMS application pipeline to run automatically every day at 6 PM. Configure a Jenkins scheduled build trigger to execute the pipeline at the required time.
+The college wants a final deployable application package for its Campus Event Management System. Create a Jenkins Pipeline that clones the GitHub repository, performs Maven clean and install, executes test cases and generates a WAR package.
+Q3. Kubernetes – Deploy and Scale Application (25 Marks)
+a) A college wants to deploy CEMS using Minikube. Create a Kubernetes Deployment using its Docker image.
+b) Thousands of students may register for a college fest. Scale the CEMS Deployment to 5 replicas.
+c) Students cannot access CEMS from their browsers. Expose the Deployment using a Node Port service.
+d) The college wants to distribute student requests across 5 application instances. Configure a Kubernetes Service to access the replicas.
+e) Deploy CEMS with 5 replicas, expose it using NodePort and verify the application in a browser using minikube service.
+Q4. Nagios + Minikube Monitoring (25 Marks)
+a) A college wants to deploy CEMS using Kubernetes. Start Minikube and create a Deployment using the application Docker image.
+b) Scale the CEMS Deployment to 4 replicas to handle multiple student requests.
+c) Expose CEMS using a NodePort service and access it through the Minikube service URL.
+d) The college wants to monitor its application server. Run Nagios using Docker and check the host and service status through its web dashboard.
+e) A new CEMS version is causing errors. Use Kubernetes commands to roll back to the previous working Deployment.
+Q5. AWS EC2 – Maven Web Application Using Docker (25 Marks)
+a) A college wants to host its CEMS homepage online. Launch an Ubuntu EC2 instance and deploy index.html using Docker and Nginx.
+b) The CEMS source code is available on GitHub. Connect to EC2 using SSH, clone the repository and create a Docker image.
+c) Deploy the CEMS Maven Web Project on EC2 by cloning the GitHub repository, building a Docker image and running the container.
+d) The college cannot connect to its EC2 instance. Configure SSH access using the downloaded .pem key file and troubleshoot connection issues.
+e) The CEMS website is not accessible through the browser. Configure EC2 Security Group inbound rules and verify access using the public IP address.
